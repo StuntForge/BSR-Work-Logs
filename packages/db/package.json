@@ -2,8 +2,8 @@
   "name": "@bsr/db",
   "version": "0.1.0",
   "private": true,
-  "main": "generated/client/index.js",
-  "types": "generated/client/index.d.ts",
+  "main": "index.ts",
+  "types": "index.ts",
   "scripts": {
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
