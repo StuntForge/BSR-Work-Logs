@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "postinstall": "npm run db:generate",
+    "postinstall": "npm run db:generate && node scripts/dedupe-react-native.js",
     "db:generate": "npm run generate --workspace=@bsr/db",
     "db:migrate": "npm run migrate --workspace=@bsr/db",
     "db:seed": "npm run seed --workspace=@bsr/db",
@@ -18,5 +18,8 @@
     "@prisma/engines@5.22.0": true,
     "esbuild@0.28.2": true,
     "prisma@5.22.0": true
+  },
+  "overrides": {
+    "react-native": "0.81.5"
   }
 }
