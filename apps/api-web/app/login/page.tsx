@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client-api";
+import { Logo } from "@/app/dashboard/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,26 +36,26 @@ export default function LoginPage() {
 
   return (
     <div className="center-screen">
-      <form className="card auth-card stack" onSubmit={handleSubmit}>
-        <div>
-          <div className="page-title" style={{ marginBottom: 0 }}>
-            BSR Committee Portal
+      <div className="stack" style={{ alignItems: "center" }}>
+        <Logo width={240} />
+        <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, margin: "-8px 0 4px", textAlign: "center" }}>
+          Member Progress &amp; Upgrade System
+        </p>
+        <form className="card auth-card stack" onSubmit={handleSubmit}>
+          <div className="field">
+            <label className="label">Email</label>
+            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
           </div>
-          <div className="muted">Member Progress &amp; Upgrade System</div>
-        </div>
-        <div className="field">
-          <label className="label">Email</label>
-          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
-        </div>
-        <div className="field">
-          <label className="label">Password</label>
-          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </div>
-        {error && <div className="error-text">{error}</div>}
-        <button className="btn btn-primary btn-block" disabled={loading} type="submit">
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
+          <div className="field">
+            <label className="label">Password</label>
+            <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
+          {error && <div className="error-text">{error}</div>}
+          <button className="btn btn-primary btn-block" disabled={loading} type="submit">
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

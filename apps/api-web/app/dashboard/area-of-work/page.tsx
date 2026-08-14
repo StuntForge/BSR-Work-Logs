@@ -60,7 +60,8 @@ export default function AreaOfWorkPage() {
   return (
     <div>
       <h1 className="page-title">Area of Work</h1>
-      <p className="page-subtitle">
+      <div className="page-title-underline" />
+      <p className="page-subtitle" style={{ marginTop: -18 }}>
         Dynamic A–F taxonomy used across every Work Record. Deactivate rather than delete once a category or item has
         been used historically.
       </p>

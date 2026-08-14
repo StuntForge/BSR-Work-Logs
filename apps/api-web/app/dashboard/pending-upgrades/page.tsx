@@ -4,12 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client-api";
 import { GRADE_LABELS, type GradeKey } from "@bsr/shared";
+import { IconInbox } from "../Icons";
 
+// Tab keys match the API response's grouping (by the grade being applied FOR — the route),
+// but each tab is labelled by the applicant's CURRENT grade, since that's what's meaningful to
+// the committee scanning the list. There's no "Full Member" tab because nobody applies from
+// Full Member — it's the top grade with no further route (spec §2, §19).
 const TABS: { key: GradeKey; label: string }[] = [
-  { key: "STUNT_PERFORMER", label: `→ ${GRADE_LABELS.STUNT_PERFORMER}` },
-  { key: "SENIOR_STUNT_PERFORMER", label: `→ ${GRADE_LABELS.SENIOR_STUNT_PERFORMER}` },
-  { key: "KEY_STUNT_PERFORMER", label: `→ ${GRADE_LABELS.KEY_STUNT_PERFORMER}` },
-  { key: "FULL_MEMBER", label: `→ ${GRADE_LABELS.FULL_MEMBER}` },
+  { key: "STUNT_PERFORMER", label: GRADE_LABELS.PROBATIONARY },
+  { key: "SENIOR_STUNT_PERFORMER", label: GRADE_LABELS.STUNT_PERFORMER },
+  { key: "KEY_STUNT_PERFORMER", label: GRADE_LABELS.SENIOR_STUNT_PERFORMER },
+  { key: "FULL_MEMBER", label: GRADE_LABELS.KEY_STUNT_PERFORMER },
 ];
 
 interface PendingItem {
@@ -36,12 +41,15 @@ export default function PendingUpgradesPage() {
   return (
     <div>
       <h1 className="page-title">Pending Upgrades</h1>
-      <p className="page-subtitle">Members who have submitted for each upgrade route.</p>
+      <div className="page-title-underline" />
+      <p className="page-subtitle" style={{ marginTop: -18 }}>
+        Members who have submitted for each upgrade route.
+      </p>
 
       <div className="tabs">
         {TABS.map((t) => (
           <button key={t.key} className={`tab ${active === t.key ? "active" : ""}`} onClick={() => setActive(t.key)}>
-            {t.label} {tabs[t.key]?.length ? `(${tabs[t.key].length})` : ""}
+            → {t.label} {tabs[t.key]?.length ? `(${tabs[t.key].length})` : ""}
           </button>
         ))}
       </div>
@@ -49,6 +57,14 @@ export default function PendingUpgradesPage() {
       <div className="card">
         {loading ? (
           <p className="muted">Loading...</p>
+        ) : items.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <IconInbox />
+            </div>
+            <div className="empty-state-title">Nothing pending in this route.</div>
+            <div className="empty-state-subtitle">No members have submitted upgrade requests for this route yet.</div>
+          </div>
         ) : (
           <table className="table">
             <thead>
@@ -66,13 +82,6 @@ export default function PendingUpgradesPage() {
                   <td>{new Date(item.submittedAt).toLocaleDateString()}</td>
                 </tr>
               ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="muted">
-                    Nothing pending in this route.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         )}

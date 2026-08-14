@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/server-session";
 import { NavLink } from "./NavLink";
 import { LogoutButton } from "./LogoutButton";
+import { Logo } from "./Logo";
+import { IconUsers, IconShield, IconTrendingUp } from "./Icons";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
@@ -11,11 +13,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="sidebar-brand">BSR Committee</div>
-        <NavLink href="/dashboard/members">Member Admin</NavLink>
-        <NavLink href="/dashboard/area-of-work">Area of Work</NavLink>
-        <NavLink href="/dashboard/pending-upgrades">Pending Upgrades</NavLink>
-        <LogoutButton />
+        <div className="sidebar-top">
+          <div className="sidebar-brand">
+            <Logo />
+          </div>
+
+          <nav className="sidebar-nav">
+            <NavLink href="/dashboard/members" icon={<IconUsers />}>
+              Member Admin
+            </NavLink>
+            <NavLink href="/dashboard/area-of-work" icon={<IconShield />}>
+              Area of Work
+            </NavLink>
+            <NavLink href="/dashboard/pending-upgrades" icon={<IconTrendingUp />}>
+              Pending Upgrades
+            </NavLink>
+          </nav>
+        </div>
+
+        <div className="sidebar-banner" />
+
+        <div className="sidebar-footer">
+          <LogoutButton />
+        </div>
       </aside>
       <main className="main">{children}</main>
     </div>
