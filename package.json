@@ -13,6 +13,11 @@
     "web:dev": "npm run dev --workspace=@bsr/api-web",
     "mobile:web": "npm run web --workspace=@bsr/mobile"
   },
+  "devDependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5"
+  },
   "allowScripts": {
     "@prisma/client@5.22.0": true,
     "@prisma/engines@5.22.0": true,
@@ -20,6 +25,8 @@
     "prisma@5.22.0": true
   },
   "overrides": {
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }

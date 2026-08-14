@@ -26,9 +26,10 @@
     "typescript": "~5.9.2"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "predev": "node ../../scripts/dedupe-react-native.js",
+    "start": "npm run predev && expo start",
+    "android": "npm run predev && expo start --android",
+    "ios": "npm run predev && expo start --ios",
+    "web": "npm run predev && expo start --web"
   }
 }
