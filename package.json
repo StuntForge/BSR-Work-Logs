@@ -6,6 +6,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "npm run db:generate",
     "db:generate": "npm run generate --workspace=@bsr/db",
     "db:migrate": "npm run migrate --workspace=@bsr/db",
     "db:seed": "npm run seed --workspace=@bsr/db",
