@@ -1,15 +1,23 @@
-// react-native-calendars pulls in its own nested copy of react-native via a transitive
-// devDependency chain (unrelated to anything it actually needs at runtime). That nested copy's
-// version doesn't match this project's, and Metro's normal hierarchical module resolution finds
-// it first for files inside that package, causing a syntax error at bundle time. Deleting the
-// duplicate is the reliable fix — Node/Metro then naturally falls through to the one real copy
-// at the workspace root. Safe to run on every install; no-ops if the path isn't there.
+// react-native-calendars pulls in its own nested copies of several packages it shares with the
+// rest of the app (react, react-native, scheduler, ...) via a transitive devDependency chain
+// unrelated to anything it actually needs at runtime. Having two copies of react/react-native in
+// the bundle causes hook-dispatcher mismatches ("Invalid hook call") and, for react-native
+// itself, version-mismatched syntax Metro can't parse. Deleting any nested package that's also
+// present at the workspace root is the reliable fix — Node/Metro then falls through to the one
+// real copy. Safe to run on every install; no-ops if the path isn't there.
 const fs = require("fs");
 const path = require("path");
 
-const target = path.resolve(__dirname, "..", "node_modules", "react-native-calendars", "node_modules", "react-native");
+const rootNodeModules = path.resolve(__dirname, "..", "node_modules");
+const nestedNodeModules = path.join(rootNodeModules, "react-native-calendars", "node_modules");
 
-if (fs.existsSync(target)) {
-  fs.rmSync(target, { recursive: true, force: true });
-  console.log("Removed duplicate nested react-native copy from react-native-calendars.");
+if (!fs.existsSync(nestedNodeModules)) process.exit(0);
+
+for (const entry of fs.readdirSync(nestedNodeModules)) {
+  const nestedPath = path.join(nestedNodeModules, entry);
+  const rootPath = path.join(rootNodeModules, entry);
+  if (fs.existsSync(rootPath)) {
+    fs.rmSync(nestedPath, { recursive: true, force: true });
+    console.log(`Removed duplicate nested "${entry}" from react-native-calendars.`);
+  }
 }
