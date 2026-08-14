@@ -1,0 +1,23 @@
+import { prisma } from "./prisma";
+
+// Append-only audit trail (spec §27). Call for every state-changing action that matters:
+// approvals/rejections, upgrade decisions, admin corrections to progression data.
+export async function writeAudit(params: {
+  actorId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: unknown;
+  after?: unknown;
+}) {
+  await prisma.auditEvent.create({
+    data: {
+      actorId: params.actorId,
+      action: params.action,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      beforeJson: params.before === undefined ? undefined : (params.before as any),
+      afterJson: params.after === undefined ? undefined : (params.after as any),
+    },
+  });
+}

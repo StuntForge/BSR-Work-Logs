@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────
+
+enum GradeKey {
+  PROBATIONARY
+  STUNT_PERFORMER
+  SENIOR_STUNT_PERFORMER
+  KEY_STUNT_PERFORMER
+  FULL_MEMBER
+}
+
+enum WorkRecordStatus {
+  ONGOING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum WorkDateStatus {
+  CLAIMED
+  REJECTED
+}
+
+enum IdentifiableStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum WorkLocation {
+  STUDIO
+  UK
+  OVERSEAS
+}
+
+enum UpgradeApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Active types implemented in V1: DAYS_WORKED, IDENTIFIABLES, MIN_TIME_AT_GRADE,
+// COORDINATOR_SPREAD, HEALTH_SAFETY. SOLO_DAYS/CORE_JOBS/POINTS exist so the engine
+// is extensible (spec §24) but have no capture UI — policy is explicitly undecided (spec §32).
+enum RequirementType {
+  DAYS_WORKED
+  IDENTIFIABLES
+  MIN_TIME_AT_GRADE
+  COORDINATOR_SPREAD
+  HEALTH_SAFETY
+  SOLO_DAYS
+  CORE_JOBS
+  POINTS
+}
+
+enum WorkApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+// ── Core identity / grade progression ──────────────────────────────────────
+
+model Grade {
+  id     String   @id @default(cuid())
+  key    GradeKey @unique
+  label  String
+  order  Int      @unique
+
+  users                  User[]
+  gradeHistories         GradeHistory[]
+  requirementDefinitions RequirementDefinition[]
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  isCommittee        Boolean   @default(false)
+  currentGradeId     String?
+  currentGrade       Grade?    @relation(fields: [currentGradeId], references: [id])
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  gradeHistories          GradeHistory[]
+  productionFamilies      ProductionFamily[]
+  workRecords              WorkRecord[]          @relation("WorkRecordPerformer")
+  workRecordsAsFullMember  WorkRecord[]          @relation("WorkRecordFullMember")
+  workApprovalsDecided     WorkApproval[]
+  upgradeApplications      UpgradeApplication[]  @relation("UpgradeApplicant")
+  upgradeDecisions         UpgradeApplication[]  @relation("UpgradeDecidedBy")
+  qualifications           Qualification[]
+  notifications            Notification[]
+  auditEvents              AuditEvent[]
+
+  @@index([currentGradeId])
+}
+
+// Authoritative grade periods. Time Served is derived from the open (endedAt = null) row,
+// not a mutable field on User — spec §22.
+model GradeHistory {
+  id                             String    @id @default(cuid())
+  userId                         String
+  user                           User      @relation(fields: [userId], references: [id])
+  gradeId                        String
+  grade                          Grade     @relation(fields: [gradeId], references: [id])
+  startedAt                      DateTime  @default(now())
+  endedAt                        DateTime?
+  createdByUpgradeApplicationId  String?   @unique
+  createdByUpgradeApplication    UpgradeApplication? @relation(fields: [createdByUpgradeApplicationId], references: [id])
+
+  workRecords WorkRecord[]
+
+  @@index([userId])
+}
+
+// Data-driven requirement for a particular upgrade route (spec §24).
+model RequirementDefinition {
+  id            String           @id @default(cuid())
+  targetGradeId String
+  targetGrade   Grade            @relation(fields: [targetGradeId], references: [id])
+  type          RequirementType
+  targetValue   Int
+  config        Json?
+  active        Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+
+  @@index([targetGradeId])
+}
+
+// ── Work records ────────────────────────────────────────────────────────
+
+// Stable root joining an original job and its Cont 1/2/3... records (spec §16).
+model ProductionFamily {
+  id          String       @id @default(cuid())
+  rootName    String
+  ownerId     String
+  owner       User         @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime     @default(now())
+  workRecords WorkRecord[]
+
+  @@index([ownerId])
+}
+
+model WorkRecord {
+  id                     String            @id @default(cuid())
+  productionFamilyId     String
+  productionFamily       ProductionFamily  @relation(fields: [productionFamilyId], references: [id])
+  continuationSequence   Int               @default(0)
+  hasSpawnedContinuation Boolean           @default(false)
+
+  performerId            String
+  performer              User              @relation("WorkRecordPerformer", fields: [performerId], references: [id])
+
+  status                 WorkRecordStatus  @default(ONGOING)
+  // The performer's open GradeHistory row at creation time — anchors this record to a grade
+  // period so progress/eligibility queries join on a stable FK rather than comparing timestamps
+  // (spec §6, §22: dates before the current grade's upgrade date are not eligible).
+  gradeHistoryId         String
+  gradeHistory           GradeHistory      @relation(fields: [gradeHistoryId], references: [id])
+
+  natureOfEmployment     String?
+  areaItemId             String?
+  areaItem               AreaItem?         @relation(fields: [areaItemId], references: [id])
+  jobDescription         String?
+  otherPerformersText    String?
+  location               WorkLocation?
+  riskAssessment         Boolean?
+  comments               String?
+
+  fullMemberId           String?
+  fullMember              User?            @relation("WorkRecordFullMember", fields: [fullMemberId], references: [id])
+
+  submittedAt            DateTime?
+  decidedAt              DateTime?
+
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  workDates              WorkDate[]
+  identifiables          Identifiable[]
+  evidenceDocuments      EvidenceDocument[]
+  workApprovals          WorkApproval[]
+  otherPerformerLinks    WorkRecordPerformerLink[]
+  upgradeEvidenceLinks   UpgradeApplicationEvidence[]
+
+  @@index([productionFamilyId])
+  @@index([performerId])
+  @@index([fullMemberId])
+  @@index([status])
+  @@index([gradeHistoryId])
+}
+
+// Other BSR members on the same job, selected from real accounts where practical (spec §5).
+model WorkRecordPerformerLink {
+  id           String     @id @default(cuid())
+  workRecordId String
+  workRecord   WorkRecord @relation(fields: [workRecordId], references: [id])
+  userId       String
+
+  @@index([workRecordId])
+}
+
+model WorkDate {
+  id           String         @id @default(cuid())
+  workRecordId String
+  workRecord   WorkRecord     @relation(fields: [workRecordId], references: [id])
+  date         DateTime
+  status       WorkDateStatus @default(CLAIMED)
+  rejectedAt   DateTime?
+
+  @@unique([workRecordId, date])
+  @@index([workRecordId])
+}
+
+// Dynamic, committee-managed A-F taxonomy (spec §7). Deactivate, never delete once referenced.
+model AreaCategory {
+  id       String   @id @default(cuid())
+  key      String   @unique
+  label    String
+  order    Int
+  active   Boolean  @default(true)
+
+  items         AreaItem[]
+  identifiables Identifiable[]
+}
+
+model AreaItem {
+  id         String       @id @default(cuid())
+  categoryId String
+  category   AreaCategory @relation(fields: [categoryId], references: [id])
+  label      String
+  order      Int
+  active     Boolean      @default(true)
+
+  workRecords WorkRecord[]
+
+  @@index([categoryId])
+}
+
+model Identifiable {
+  id                    String              @id @default(cuid())
+  workRecordId          String
+  workRecord            WorkRecord          @relation(fields: [workRecordId], references: [id])
+  categoryId            String
+  category              AreaCategory        @relation(fields: [categoryId], references: [id])
+  performerDescription  String
+  verifiedDescription   String?
+  status                IdentifiableStatus  @default(SUBMITTED)
+  reviewedAt            DateTime?
+  createdAt             DateTime            @default(now())
+
+  @@index([workRecordId])
+}
+
+model EvidenceDocument {
+  id           String     @id @default(cuid())
+  workRecordId String
+  workRecord   WorkRecord @relation(fields: [workRecordId], references: [id])
+  fileUrl      String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  uploadedAt   DateTime   @default(now())
+
+  @@index([workRecordId])
+}
+
+model WorkApproval {
+  id           String                @id @default(cuid())
+  workRecordId String
+  workRecord   WorkRecord            @relation(fields: [workRecordId], references: [id])
+  decidedById  String
+  decidedBy    User                  @relation(fields: [decidedById], references: [id])
+  decision     WorkApprovalDecision
+  message      String?
+  decidedAt    DateTime              @default(now())
+
+  @@index([workRecordId])
+}
+
+// ── Upgrades ────────────────────────────────────────────────────────────
+
+// Frozen submission — later work must not silently alter it (spec §18).
+model UpgradeApplication {
+  id              String                       @id @default(cuid())
+  userId          String
+  user            User                         @relation("UpgradeApplicant", fields: [userId], references: [id])
+  fromGradeId     String
+  toGradeId       String
+  status          UpgradeApplicationStatus     @default(PENDING)
+  submittedAt     DateTime                     @default(now())
+  decidedAt       DateTime?
+  decidedById     String?
+  decidedBy       User?                        @relation("UpgradeDecidedBy", fields: [decidedById], references: [id])
+  decisionMessage String?
+
+  evidenceLinks       UpgradeApplicationEvidence[]
+  createdGradeHistory GradeHistory?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Snapshot/link set identifying exactly which approved WorkRecords were relied upon.
+model UpgradeApplicationEvidence {
+  id                              String              @id @default(cuid())
+  upgradeApplicationId            String
+  upgradeApplication              UpgradeApplication  @relation(fields: [upgradeApplicationId], references: [id])
+  workRecordId                    String
+  workRecord                      WorkRecord          @relation(fields: [workRecordId], references: [id])
+  approvedDaysSnapshot            Int
+  approvedIdentifiablesSnapshot   Int
+
+  @@unique([upgradeApplicationId, workRecordId])
+}
+
+// Extensible H&S/course evidence; detailed verification/expiry workflow TBD (spec §25).
+model Qualification {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  type        String    @default("HEALTH_SAFETY")
+  status      String    @default("INCOMPLETE")
+  completedAt DateTime?
+  notes       String?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// ── Audit / notifications ──────────────────────────────────────────────
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  beforeJson Json?
+  afterJson  Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model Notification {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  type              String
+  title             String
+  body              String
+  relatedEntityType String?
+  relatedEntityId   String?
+  readAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, readAt])
+}

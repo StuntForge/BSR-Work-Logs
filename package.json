@@ -1,0 +1,21 @@
+{
+  "name": "bsr-work-records",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:generate": "npm run generate --workspace=@bsr/db",
+    "db:migrate": "npm run migrate --workspace=@bsr/db",
+    "db:seed": "npm run seed --workspace=@bsr/db",
+    "web:dev": "npm run dev --workspace=@bsr/api-web",
+    "mobile:web": "npm run web --workspace=@bsr/mobile"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "esbuild@0.28.2": true,
+    "prisma@5.22.0": true
+  }
+}
