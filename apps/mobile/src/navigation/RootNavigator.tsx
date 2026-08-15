@@ -2,10 +2,11 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Text, TouchableOpacity, ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../auth/AuthContext";
 import { BadgeProvider, useBadges } from "./BadgeContext";
 import { colors } from "../theme";
+import { IconHome, IconBriefcase, IconClipboardCheck, IconBell } from "../components/Icons";
 
 import LoginScreen from "../screens/LoginScreen";
 import HomeScreen from "../screens/HomeScreen";
@@ -19,15 +20,6 @@ import NotificationsScreen from "../screens/NotificationsScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function LogoutHeaderButton() {
-  const { logout } = useAuth();
-  return (
-    <TouchableOpacity onPress={logout} style={{ marginRight: 12 }}>
-      <Text style={{ color: colors.greenDark, fontWeight: "600" }}>Sign out</Text>
-    </TouchableOpacity>
-  );
-}
-
 function MainTabs() {
   const { user } = useAuth();
   const { unreadNotifications, pendingApprovals } = useBadges();
@@ -35,25 +27,32 @@ function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerRight: () => <LogoutHeaderButton />,
-        tabBarActiveTintColor: colors.greenDark,
-        headerStyle: { backgroundColor: colors.cream },
-        headerTitleStyle: { color: colors.greenDark },
+        headerShown: false,
+        tabBarActiveTintColor: "#ffffff",
+        tabBarInactiveTintColor: "rgba(255,255,255,0.55)",
+        tabBarStyle: { backgroundColor: colors.tealDarkest, borderTopWidth: 0, height: 64, paddingBottom: 8, paddingTop: 8 },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
       }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Work" component={WorkListScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarIcon: ({ color, size }) => <IconHome color={color} size={size} /> }} />
+      <Tab.Screen name="Work" component={WorkListScreen} options={{ tabBarIcon: ({ color, size }) => <IconBriefcase color={color} size={size} /> }} />
       {user?.isFullMember && (
         <Tab.Screen
           name="Approvals"
           component={WorkApprovalsScreen}
-          options={{ tabBarBadge: pendingApprovals > 0 ? pendingApprovals : undefined }}
+          options={{
+            tabBarBadge: pendingApprovals > 0 ? pendingApprovals : undefined,
+            tabBarIcon: ({ color, size }) => <IconClipboardCheck color={color} size={size} />,
+          }}
         />
       )}
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{ tabBarBadge: unreadNotifications > 0 ? unreadNotifications : undefined }}
+        options={{
+          tabBarBadge: unreadNotifications > 0 ? unreadNotifications : undefined,
+          tabBarIcon: ({ color, size }) => <IconBell color={color} size={size} />,
+        }}
       />
     </Tab.Navigator>
   );
@@ -64,7 +63,7 @@ export default function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cream }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
         <ActivityIndicator />
       </View>
     );
@@ -76,11 +75,11 @@ export default function RootNavigator() {
         <LoginScreen />
       ) : (
         <BadgeProvider>
-          <Stack.Navigator>
-            <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
-            <Stack.Screen name="NewProduction" component={NewProductionScreen} options={{ title: "New production" }} />
-            <Stack.Screen name="ProductionDetail" component={ProductionDetailScreen} options={{ title: "Production" }} />
-            <Stack.Screen name="Review" component={ReviewScreen} options={{ title: "Review" }} />
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="NewProduction" component={NewProductionScreen} />
+            <Stack.Screen name="ProductionDetail" component={ProductionDetailScreen} />
+            <Stack.Screen name="Review" component={ReviewScreen} />
           </Stack.Navigator>
         </BadgeProvider>
       )}

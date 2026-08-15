@@ -2,16 +2,26 @@ import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
-import { Screen } from "../components/UI";
+import { IconCircle } from "../components/UI";
+import { Header } from "../components/Header";
+import { IconAward, IconClipboardCheck, IconCalendar } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
 
 interface Notification {
   id: string;
+  type: string;
   title: string;
   body: string;
   readAt: string | null;
   createdAt: string;
+}
+
+function iconFor(n: Notification) {
+  const positive = !/reject/i.test(n.title);
+  const tone = positive ? "green" : "red";
+  if (n.type === "UPGRADE_DECISION") return { icon: <IconAward size={20} color={positive ? colors.green : colors.red} />, tone: tone as const };
+  return { icon: <IconClipboardCheck size={20} color={positive ? colors.green : colors.red} />, tone: tone as const };
 }
 
 export default function NotificationsScreen() {
@@ -40,33 +50,58 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <Screen>
-      <Text style={styles.title}>Notifications</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Header variant="main" />
       <FlatList
-        contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+        contentContainerStyle={styles.content}
         data={notifications}
         keyExtractor={(n) => n.id}
         refreshing={loading}
         onRefresh={load}
+        ListHeaderComponent={<Text style={styles.title}>Notifications</Text>}
         ListEmptyComponent={!loading ? <Text style={styles.muted}>No notifications yet.</Text> : null}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={[styles.card, !item.readAt && styles.cardUnread]} onPress={() => markRead(item)}>
-            <Text style={styles.notifTitle}>{item.title}</Text>
-            <Text style={styles.notifBody}>{item.body}</Text>
-            <Text style={styles.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const { icon, tone } = iconFor(item);
+          return (
+            <TouchableOpacity style={styles.card} onPress={() => markRead(item)}>
+              {!item.readAt && <View style={styles.unreadDot} />}
+              <IconCircle tone={tone} size={44}>
+                {icon}
+              </IconCircle>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.notifTitle}>{item.title}</Text>
+                <Text style={styles.notifBody}>{item.body}</Text>
+                <View style={styles.metaRow}>
+                  <IconCalendar size={12} color={colors.textMuted} />
+                  <Text style={styles.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "800", color: colors.greenDark, paddingHorizontal: 16, paddingTop: 16 },
-  card: { backgroundColor: colors.white, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
-  cardUnread: { borderColor: colors.green, backgroundColor: colors.greenLight },
-  notifTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
-  notifBody: { fontSize: 14, color: colors.text, marginTop: 4 },
-  meta: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
+  content: { padding: 18, paddingBottom: 60 },
+  title: { fontSize: 28, fontWeight: "800", color: colors.text, marginBottom: 16 },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 10,
+    position: "relative",
+  },
+  unreadDot: { position: "absolute", top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.teal },
+  notifTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
+  notifBody: { fontSize: 13, color: colors.textMuted, marginTop: 3 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
+  meta: { fontSize: 11, color: colors.textMuted },
   muted: { color: colors.textMuted, textAlign: "center", marginTop: 40 },
 });

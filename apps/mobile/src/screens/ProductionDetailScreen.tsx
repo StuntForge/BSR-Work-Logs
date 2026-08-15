@@ -5,7 +5,8 @@ import { Calendar } from "react-native-calendars";
 import * as DocumentPicker from "expo-document-picker";
 import { apiFetch, API_URL } from "../api/client";
 import { getToken } from "../api/storage";
-import { Card, Button, Badge, Screen } from "../components/UI";
+import { Card, Button, Badge } from "../components/UI";
+import { Header } from "../components/Header";
 import { colors } from "../theme";
 import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION } from "@bsr/shared";
 
@@ -106,9 +107,10 @@ export default function ProductionDetailScreen() {
 
   if (loading || !record) {
     return (
-      <Screen>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Header variant="detail" title="Production" />
         <ActivityIndicator style={{ marginTop: 40 }} />
-      </Screen>
+      </View>
     );
   }
 
@@ -218,7 +220,8 @@ export default function ProductionDetailScreen() {
   const selectedItem = selectedCategory?.items.find((i) => i.id === areaItemId);
 
   return (
-    <Screen>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Header variant="detail" title="Production" />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
         <View style={styles.rowBetween}>
           <Text style={styles.title}>{record.productionName}</Text>
@@ -421,7 +424,7 @@ export default function ProductionDetailScreen() {
           </Card>
         )}
       </ScrollView>
-    </Screen>
+    </View>
   );
 }
 

@@ -1,9 +1,11 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { Calendar } from "react-native-calendars";
 import { apiFetch } from "../api/client";
-import { Card, Button, Badge, Screen } from "../components/UI";
+import { Card, Button, Badge, IconCircle } from "../components/UI";
+import { Header } from "../components/Header";
+import { IconCalendar, IconDocument, IconIdCard, IconScale, IconCheckCircle, IconXCircle } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
 
@@ -16,6 +18,17 @@ interface RecordDetail {
   workDates: { id: string; date: string; status: string }[];
   identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string }[];
   evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
+}
+
+function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <View style={styles.sectionHeaderRow}>
+      <IconCircle tone="teal" size={36}>
+        {icon}
+      </IconCircle>
+      <Text style={styles.sectionLabel}>{label}</Text>
+    </View>
+  );
 }
 
 export default function ReviewScreen() {
@@ -45,9 +58,10 @@ export default function ReviewScreen() {
 
   if (!record) {
     return (
-      <Screen>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Header variant="detail" title="Review" />
         <ActivityIndicator style={{ marginTop: 40 }} />
-      </Screen>
+      </View>
     );
   }
 
@@ -93,18 +107,19 @@ export default function ReviewScreen() {
   const isReviewable = record.status === "SUBMITTED";
 
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Header variant="detail" title="Review" />
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>{record.performer.name}</Text>
         <Text style={styles.subtitle}>{record.productionName}</Text>
 
-        <Card style={{ marginTop: 12 }}>
+        <Card style={styles.card}>
           <View style={styles.rowBetween}>
             <View>
-              <Text style={styles.sectionLabel}>Days</Text>
+              <Text style={styles.plainLabel}>DAYS</Text>
               <Text style={styles.bigNumber}>{claimedCount}</Text>
             </View>
-            <Button title={showDates ? "Hide dates" : "View Dates"} variant="secondary" onPress={() => setShowDates((s) => !s)} />
+            <Button title={showDates ? "Hide dates" : "View Dates"} variant="secondary" icon={<IconCalendar size={16} color={colors.text} />} onPress={() => setShowDates((s) => !s)} />
           </View>
           {showDates && (
             <View style={{ marginTop: 12 }}>
@@ -122,8 +137,8 @@ export default function ReviewScreen() {
           )}
         </Card>
 
-        <Card style={{ marginTop: 12 }}>
-          <Text style={styles.sectionLabel}>Contract / evidence</Text>
+        <Card style={styles.card}>
+          <SectionHeader icon={<IconDocument size={17} color={colors.tealDark} />} label="CONTRACT / EVIDENCE" />
           {record.evidenceDocuments.length === 0 && <Text style={styles.muted}>None uploaded.</Text>}
           {record.evidenceDocuments.map((doc) => (
             <Text key={doc.id} style={{ marginTop: 4 }}>
@@ -132,8 +147,8 @@ export default function ReviewScreen() {
           ))}
         </Card>
 
-        <Card style={{ marginTop: 12 }}>
-          <Text style={styles.sectionLabel}>Identifiables ({record.identifiables.length})</Text>
+        <Card style={styles.card}>
+          <SectionHeader icon={<IconIdCard size={17} color={colors.tealDark} />} label={`IDENTIFIABLES (${record.identifiables.length})`} />
           {record.identifiables.map((idf) => (
             <View key={idf.id} style={styles.idRow}>
               <Text style={styles.idCategory}>{idf.category.label}</Text>
@@ -149,7 +164,9 @@ export default function ReviewScreen() {
                 <>
                   <Text>{idf.verifiedDescription ?? idf.performerDescription}</Text>
                   {idf.status !== "SUBMITTED" ? (
-                    <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />
+                    <View style={{ marginTop: 6 }}>
+                      <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />
+                    </View>
                   ) : (
                     isReviewable && (
                       <View style={styles.row}>
@@ -174,8 +191,8 @@ export default function ReviewScreen() {
         </Card>
 
         {isReviewable ? (
-          <Card style={{ marginTop: 12 }}>
-            <Text style={styles.sectionLabel}>Decision</Text>
+          <Card style={styles.card}>
+            <SectionHeader icon={<IconScale size={17} color={colors.tealDark} />} label="DECISION" />
             <TextInput
               style={[styles.input, { minHeight: 60 }]}
               multiline
@@ -185,29 +202,33 @@ export default function ReviewScreen() {
             />
             {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
             <View style={styles.row}>
-              <Button title={busy ? "Saving..." : "Approve"} onPress={() => completeDecision("APPROVED")} disabled={busy} />
-              <Button title="Reject" variant="danger" onPress={() => completeDecision("REJECTED")} disabled={busy} />
+              <Button title="Approve" icon={<IconCheckCircle size={16} color="#fff" />} onPress={() => completeDecision("APPROVED")} disabled={busy} loading={busy} />
+              <Button title="Reject" variant="danger" icon={<IconXCircle size={16} color="#fff" />} onPress={() => completeDecision("REJECTED")} disabled={busy} />
             </View>
           </Card>
         ) : (
-          <Card style={{ marginTop: 12 }}>
+          <Card style={styles.card}>
             <Badge label={record.status} tone={record.status === "APPROVED" ? "green" : "gray"} />
           </Card>
         )}
       </ScrollView>
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 20, fontWeight: "800", color: colors.greenDark },
-  subtitle: { fontSize: 14, color: colors.textMuted, marginTop: 2 },
+  content: { padding: 18, paddingBottom: 60, gap: 12 },
+  title: { fontSize: 22, fontWeight: "800", color: colors.text },
+  subtitle: { fontSize: 14, color: colors.textMuted, marginTop: 2, marginBottom: 4 },
+  card: {},
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   row: { flexDirection: "row", gap: 8, marginTop: 8 },
-  sectionLabel: { fontSize: 13, fontWeight: "700", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.4 },
-  bigNumber: { fontSize: 28, fontWeight: "800", color: colors.greenDark, marginTop: 4 },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  sectionLabel: { fontSize: 13, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.4 },
+  plainLabel: { fontSize: 12, fontWeight: "800", color: colors.textMuted, letterSpacing: 0.4 },
+  bigNumber: { fontSize: 30, fontWeight: "800", color: colors.tealDark, marginTop: 4 },
   idRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-  idCategory: { fontSize: 12, fontWeight: "700", color: colors.greenDark, marginBottom: 2 },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, backgroundColor: colors.white, marginTop: 6 },
+  idCategory: { fontSize: 12, fontWeight: "700", color: colors.tealDark, marginBottom: 2 },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, backgroundColor: colors.white, marginTop: 6 },
   muted: { color: colors.textMuted, fontSize: 13, marginTop: 6 },
 });

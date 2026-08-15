@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
-import { Button, Screen } from "../components/UI";
+import { Button } from "../components/UI";
+import { Header } from "../components/Header";
 import { colors } from "../theme";
 
 export default function NewProductionScreen() {
@@ -28,7 +29,8 @@ export default function NewProductionScreen() {
   }
 
   return (
-    <Screen>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Header variant="detail" title="New production" />
       <View style={styles.content}>
         <Text style={styles.label}>Production name</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} autoFocus placeholder="e.g. The Long Ride" />
@@ -37,13 +39,13 @@ export default function NewProductionScreen() {
           <Button title={saving ? "Creating..." : "Create"} onPress={create} disabled={saving} loading={saving} />
         </View>
       </View>
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 20 },
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, backgroundColor: colors.white },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, backgroundColor: colors.white },
   error: { color: colors.red, marginTop: 8, fontSize: 13 },
 });

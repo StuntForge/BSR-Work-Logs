@@ -12,14 +12,16 @@ export function Button({
   variant = "primary",
   disabled,
   loading,
+  icon,
 }: {
   title: string;
   onPress: () => void;
   variant?: "primary" | "secondary" | "danger";
   disabled?: boolean;
   loading?: boolean;
+  icon?: React.ReactNode;
 }) {
-  const bg = variant === "primary" ? colors.greenDark : variant === "danger" ? colors.red : colors.white;
+  const bg = variant === "primary" ? colors.tealDark : variant === "danger" ? colors.red : colors.white;
   const textColor = variant === "secondary" ? colors.text : colors.white;
   return (
     <TouchableOpacity
@@ -30,14 +32,28 @@ export function Button({
         { backgroundColor: bg, borderColor: variant === "secondary" ? colors.border : bg, opacity: disabled ? 0.5 : 1 },
       ]}
     >
-      {loading ? <ActivityIndicator color={textColor} /> : <Text style={{ color: textColor, fontWeight: "600", fontSize: 15 }}>{title}</Text>}
+      {loading ? (
+        <ActivityIndicator color={textColor} />
+      ) : (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {icon}
+          <Text style={{ color: textColor, fontWeight: "700", fontSize: 15 }}>{title}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
 
-export function Badge({ label, tone = "gray" }: { label: string; tone?: "green" | "amber" | "red" | "gray" }) {
-  const bg = { green: colors.greenLight, amber: "#f7ecd8", red: "#f5e0dc", gray: "#eee" }[tone];
-  const fg = { green: colors.greenDark, amber: colors.amber, red: colors.red, gray: colors.textMuted }[tone];
+const TONES = {
+  green: { bg: colors.greenLight, fg: colors.green },
+  teal: { bg: colors.tealLight, fg: colors.tealDark },
+  amber: { bg: colors.amberLight, fg: colors.amber },
+  red: { bg: colors.redLight, fg: colors.red },
+  gray: { bg: "#eef1f1", fg: colors.textMuted },
+} as const;
+
+export function Badge({ label, tone = "gray" }: { label: string; tone?: keyof typeof TONES }) {
+  const { bg, fg } = TONES[tone];
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
       <Text style={{ color: fg, fontSize: 12, fontWeight: "700" }}>{label}</Text>
@@ -45,11 +61,26 @@ export function Badge({ label, tone = "gray" }: { label: string; tone?: "green" 
   );
 }
 
-export function ProgressBar({ value, max }: { value: number; max: number }) {
+export function IconCircle({
+  children,
+  tone = "teal",
+  size = 44,
+}: {
+  children: React.ReactNode;
+  tone?: keyof typeof TONES;
+  size?: number;
+}) {
+  const { bg } = TONES[tone];
+  return (
+    <View style={[styles.iconCircle, { backgroundColor: bg, width: size, height: size, borderRadius: size / 2 }]}>{children}</View>
+  );
+}
+
+export function ProgressBar({ value, max, color = colors.teal, trackColor = colors.border }: { value: number; max: number; color?: string; trackColor?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${pct}%` }]} />
+    <View style={[styles.progressTrack, { backgroundColor: trackColor }]}>
+      <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: color }]} />
     </View>
   );
 }
@@ -59,18 +90,23 @@ export function Screen({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.cream },
+  screen: { flex: 1, backgroundColor: colors.bg },
   card: {
     backgroundColor: colors.white,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
+    padding: 18,
+    shadowColor: "#023c48",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   button: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingVertical: 13,
     paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
@@ -81,15 +117,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignSelf: "flex-start",
   },
+  iconCircle: { alignItems: "center", justifyContent: "center" },
   progressTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.greenLight,
     overflow: "hidden",
   },
   progressFill: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.green,
   },
 });
