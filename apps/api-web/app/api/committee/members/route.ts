@@ -6,7 +6,9 @@ import { isCommitteeSession } from "@/lib/committee";
 import { writeAudit } from "@/lib/audit";
 import { ok, badRequest, unauthorized, forbidden, serverError } from "@/lib/http";
 
-// GET /api/committee/members?query=&gradeKey=&active=true|false — view/search/filter users (spec §23).
+// GET /api/committee/members?query=&gradeKey=&active=true|false — view/search/filter BSR
+// members (spec §23). This list is every mobile-app member account; the committee's own web
+// portal login is managed separately via /api/auth/profile, never shown here.
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession(req);
@@ -18,6 +20,7 @@ export async function GET(req: NextRequest) {
 
     const users = await prisma.user.findMany({
       where: {
+        isCommittee: false,
         name: query ? { contains: query, mode: "insensitive" } : undefined,
         currentGrade: gradeKey ? { key: gradeKey as any } : undefined,
         active: activeParam ? activeParam === "true" : undefined,
@@ -32,7 +35,6 @@ export async function GET(req: NextRequest) {
         name: u.name,
         email: u.email,
         active: u.active,
-        isCommittee: u.isCommittee,
         currentGrade: u.currentGrade ? { key: u.currentGrade.key, label: u.currentGrade.label } : null,
       })),
     });
@@ -45,11 +47,12 @@ const createSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   gradeKey: z.string().min(1),
-  isCommittee: z.boolean().optional(),
 });
 
-// POST /api/committee/members — create a new member account (spec §23). No public
-// self-service registration exists (spec §29); this is the only way an account is created.
+// POST /api/committee/members — create a new BSR member account (spec §23). No public
+// self-service registration exists (spec §29); this is the only way a member account is
+// created. Always a mobile-app member — never a committee account (there is exactly one
+// committee login, managed via Settings, not created here).
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession(req);
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
           email: body.data.email.toLowerCase(),
           passwordHash,
           currentGradeId: grade.id,
-          isCommittee: body.data.isCommittee ?? false,
+          isCommittee: false,
           mustChangePassword: true,
         },
       });

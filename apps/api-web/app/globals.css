@@ -118,6 +118,9 @@ button {
   margin-top: auto;
   position: relative;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .sidebar-signout {

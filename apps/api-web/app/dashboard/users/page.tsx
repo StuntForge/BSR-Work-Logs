@@ -10,7 +10,6 @@ interface Member {
   name: string;
   email: string;
   active: boolean;
-  isCommittee: boolean;
   currentGrade: { key: string; label: string } | null;
 }
 
@@ -19,7 +18,7 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-export default function MembersPage() {
+export default function UsersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [query, setQuery] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
@@ -67,7 +66,7 @@ export default function MembersPage() {
     <div>
       <div className="row-between">
         <div>
-          <h1 className="page-title">Member Admin</h1>
+          <h1 className="page-title">Users</h1>
           <div className="page-title-underline" />
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
@@ -75,7 +74,7 @@ export default function MembersPage() {
         </button>
       </div>
       <p className="page-subtitle" style={{ marginTop: -18 }}>
-        View, search and manage BSR member accounts.
+        Every BSR member — these accounts sign in to the mobile app, not this portal.
       </p>
 
       {notice && (
@@ -149,18 +148,15 @@ export default function MembersPage() {
                   <td>
                     <div className="name-cell">
                       <span className="avatar">{initials(m.name)}</span>
-                      <span className="row">
-                        <strong>{m.name}</strong>
-                        {m.isCommittee && <span className="badge badge-gray">Committee</span>}
-                      </span>
+                      <strong>{m.name}</strong>
                     </div>
                   </td>
                   <td>{m.email}</td>
                   <td>{m.currentGrade?.label ?? "—"}</td>
                   <td>
-                    <span className="badge badge-green">
+                    <span className={`badge ${m.active ? "badge-green" : "badge-red"}`}>
                       <span className="badge-dot" />
-                      {m.active ? "Active" : "Inactive"}
+                      {m.active ? "Active" : "Suspended"}
                     </span>
                   </td>
                   <td>
@@ -180,7 +176,7 @@ export default function MembersPage() {
               {members.length === 0 && (
                 <tr>
                   <td colSpan={5} className="muted">
-                    No members found.
+                    No users found.
                   </td>
                 </tr>
               )}
@@ -232,7 +228,7 @@ function CreateMemberModal({ onClose, onCreated }: { onClose: () => void; onCrea
       onClick={onClose}
     >
       <form className="card stack" style={{ width: 380 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h2 style={{ margin: 0, color: "var(--bsr-teal-dark)" }}>New member account</h2>
+        <h2 style={{ margin: 0, color: "var(--bsr-teal-dark)" }}>New user account</h2>
         <div className="field">
           <label className="label">Name</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
