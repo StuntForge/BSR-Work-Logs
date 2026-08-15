@@ -11,6 +11,7 @@ interface Member {
   email: string;
   active: boolean;
   currentGrade: { key: string; label: string } | null;
+  healthSafetyLevel: number;
 }
 
 function initials(name: string) {
@@ -58,6 +59,11 @@ export default function UsersPage() {
   async function resetPassword(m: Member) {
     const data = await apiFetch<{ tempPassword: string }>(`/api/committee/members/${m.id}/reset-password`, { method: "POST" });
     setNotice(`New temporary password for ${m.name}: ${data.tempPassword}`);
+  }
+
+  async function setHealthSafetyLevel(m: Member, level: number) {
+    await apiFetch(`/api/committee/members/${m.id}/health-safety`, { method: "PATCH", body: JSON.stringify({ level }) });
+    load();
   }
 
   const filterLabel = gradeFilter ? GRADE_LABELS[gradeFilter as keyof typeof GRADE_LABELS] : "All";
@@ -139,6 +145,7 @@ export default function UsersPage() {
                 <th>Email</th>
                 <th>Grade</th>
                 <th>Status</th>
+                <th>H&amp;S Level</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -160,6 +167,15 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td>
+                    <select className="input" style={{ width: 90 }} value={m.healthSafetyLevel} onChange={(e) => setHealthSafetyLevel(m, Number(e.target.value))}>
+                      <option value={0}>None</option>
+                      <option value={1}>Level 1</option>
+                      <option value={2}>Level 2</option>
+                      <option value={3}>Level 3</option>
+                      <option value={4}>Level 4</option>
+                    </select>
+                  </td>
+                  <td>
                     <div className="row">
                       <button className="btn" onClick={() => resetPassword(m)}>
                         <IconKey />
@@ -175,7 +191,7 @@ export default function UsersPage() {
               ))}
               {members.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     No users found.
                   </td>
                 </tr>

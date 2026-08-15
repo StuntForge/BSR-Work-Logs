@@ -327,12 +327,16 @@ model UpgradeApplicationEvidence {
 }
 
 // Extensible H&S/course evidence; detailed verification/expiry workflow TBD (spec §25).
+// Health & Safety level is committee-set, not self-service (spec §25 leaves the detailed
+// workflow TBD; this is the narrow, explicit policy given directly by BSR: level required rises
+// with grade — 1 for Stunt Performer, 2 for Senior, 3 for Key, 4 for Full Member).
 model Qualification {
   id          String    @id @default(cuid())
   userId      String
   user        User      @relation(fields: [userId], references: [id])
   type        String    @default("HEALTH_SAFETY")
   status      String    @default("INCOMPLETE")
+  level       Int       @default(0)
   completedAt DateTime?
   notes       String?
   updatedAt   DateTime  @updatedAt

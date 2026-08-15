@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, StyleSheet, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { View, Text, TextInput, StyleSheet, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Modal, Pressable, Alert } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Calendar } from "react-native-calendars";
 import * as DocumentPicker from "expo-document-picker";
 import { apiFetch, API_URL } from "../api/client";
@@ -8,9 +9,11 @@ import { getToken } from "../api/storage";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
 import { KeyboardAvoider } from "../components/KeyboardAvoider";
-import { IconIdCard, IconChevronDown, IconPlus } from "../components/Icons";
+import { IconIdCard, IconChevronDown, IconPlus, IconCheck, IconTrash } from "../components/Icons";
 import { colors } from "../theme";
 import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION, WORK_LOCATION_LABELS } from "@bsr/shared";
+
+const SUBMIT_BORDER = "#023C48";
 
 interface AreaCategory {
   id: string;
@@ -39,8 +42,6 @@ interface RecordDetail {
   latestDecision: { decision: string; message: string | null } | null;
 }
 
-const ADD_DATES_DEBOUNCE_MS = 700;
-
 export default function ProductionDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -55,7 +56,8 @@ export default function ProductionDetailScreen() {
   const [location, setLocation] = useState<string | null>(null);
   const [riskAssessment, setRiskAssessment] = useState(false);
   const [comments, setComments] = useState("");
-  const [savingDetails, setSavingDetails] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [showIdModal, setShowIdModal] = useState(false);
 
@@ -65,12 +67,9 @@ export default function ProductionDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Local, optimistic calendar state so taps feel instant instead of waiting on a round trip
-  // per date. Adds are batched and sent together after a short pause; removes fire in the
-  // background without blocking the UI.
+  // Calendar taps only ever touch this local state — nothing is sent to the server until the
+  // performer explicitly saves via the header tick, which diffs this against record.workDates.
   const [localDates, setLocalDates] = useState<WorkDate[]>([]);
-  const pendingAddsRef = useRef<Set<string>>(new Set());
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
@@ -118,42 +117,57 @@ export default function ProductionDetailScreen() {
   const isOwnerOngoing = record.status === "ONGOING";
   const isRejected = record.status === "REJECTED";
 
-  async function saveDetails() {
-    setSavingDetails(true);
-    try {
-      await apiFetch(`/api/work-records/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ jobDescription, location, riskAssessment, comments }),
-      });
-      await load();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSavingDetails(false);
-    }
-  }
-
-  async function flushPendingAdds() {
-    const toAdd = Array.from(pendingAddsRef.current);
-    pendingAddsRef.current.clear();
-    if (toAdd.length === 0) return;
-    try {
-      await apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: toAdd }) });
-    } finally {
-      load();
-    }
-  }
-
   function toggleDate(dateStr: string) {
     const existing = localDates.find((d) => d.date.slice(0, 10) === dateStr);
     if (existing) {
       setLocalDates((prev) => prev.filter((d) => d.id !== existing.id));
-      apiFetch(`/api/work-records/${id}/dates/${existing.id}`, { method: "DELETE" }).catch(() => load());
     } else {
       setLocalDates((prev) => [...prev, { id: `pending-${dateStr}`, date: dateStr, status: "CLAIMED" }]);
-      pendingAddsRef.current.add(dateStr);
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = setTimeout(flushPendingAdds, ADD_DATES_DEBOUNCE_MS);
+    }
+  }
+
+  async function saveAll() {
+    if (!record) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const localIds = new Set(localDates.map((d) => d.id));
+      const removedIds = record.workDates.filter((d) => !localIds.has(d.id)).map((d) => d.id);
+      const addedDates = localDates.filter((d) => d.id.startsWith("pending-")).map((d) => d.date);
+
+      await Promise.all([
+        apiFetch(`/api/work-records/${id}`, { method: "PATCH", body: JSON.stringify({ jobDescription, location, riskAssessment, comments }) }),
+        addedDates.length > 0 ? apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: addedDates }) }) : Promise.resolve(),
+        ...removedIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
+      ]);
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function confirmDelete() {
+    Alert.alert(
+      "Delete this work record?",
+      "This permanently deletes this production entry, including every date, identifiable and detail saved against it. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: doDelete },
+      ]
+    );
+  }
+
+  async function doDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/work-records/${id}`, { method: "DELETE" });
+      navigation.goBack();
+    } catch (err: any) {
+      setError(err.message);
+      setDeleting(false);
     }
   }
 
@@ -233,7 +247,20 @@ export default function ProductionDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header variant="detail" title="Production" />
+      <Header
+        variant="detail"
+        title="Production"
+        rightAction={
+          isOwnerOngoing
+            ? {
+                icon: saving ? <ActivityIndicator size="small" color="#fff" /> : <IconCheck size={22} color="#fff" />,
+                onPress: () => {
+                  if (!saving) saveAll();
+                },
+              }
+            : undefined
+        }
+      />
       <KeyboardAvoider>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View style={styles.rowBetween}>
@@ -299,8 +326,6 @@ export default function ProductionDetailScreen() {
           <Field label="Comments">
             <TextInput style={[styles.input, { minHeight: 60 }]} multiline value={comments} onChangeText={setComments} editable={isOwnerOngoing} />
           </Field>
-
-          {isOwnerOngoing && <Button title={savingDetails ? "Saving..." : "Save details"} onPress={saveDetails} disabled={savingDetails} loading={savingDetails} />}
         </Card>
 
         <Card style={{ marginTop: 12 }}>
@@ -353,7 +378,7 @@ export default function ProductionDetailScreen() {
         </Card>
 
         {isOwnerOngoing && (
-          <Card style={{ marginTop: 12 }}>
+          <Card style={{ marginTop: 12, borderWidth: 2, borderColor: SUBMIT_BORDER }}>
             <Text style={styles.sectionLabel}>Submit for approval</Text>
             <Text style={styles.muted}>{SUBMIT_FOR_APPROVAL_HELP_TEXT}</Text>
 
@@ -389,6 +414,19 @@ export default function ProductionDetailScreen() {
             <Button title={submitting ? "Submitting..." : "Submit for Approval"} onPress={submitForApproval} disabled={submitting} loading={submitting} />
           </Card>
         )}
+
+        {isOwnerOngoing && (
+          <View style={{ marginTop: 20 }}>
+            <Button
+              title={deleting ? "Deleting..." : "Delete work record"}
+              variant="danger"
+              icon={<IconTrash size={16} color={colors.white} />}
+              onPress={confirmDelete}
+              disabled={deleting}
+              loading={deleting}
+            />
+          </View>
+        )}
       </ScrollView>
       </KeyboardAvoider>
 
@@ -408,6 +446,7 @@ function AddIdentifiableModal({
   onClose: () => void;
   onAdd: (categoryId: string, description: string) => Promise<void>;
 }) {
+  const insets = useSafeAreaInsets();
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [description, setDescription] = useState("");
@@ -446,52 +485,50 @@ function AddIdentifiableModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <KeyboardAvoider>
-          <View style={styles.modalCard}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.modalTitle}>Add Identifiable</Text>
-              <TouchableOpacity onPress={onClose}>
-                <Text style={{ color: colors.textMuted, fontSize: 20 }}>×</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Field label="Category">
-              <TouchableOpacity style={styles.dropdown} onPress={() => setShowDropdown((s) => !s)}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <IconIdCard size={16} color={colors.textMuted} />
-                  <Text style={{ color: selected ? colors.text : colors.textMuted }}>{selected ? selected.label : "Select a category..."}</Text>
-                </View>
-                <IconChevronDown size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-              {showDropdown && (
-                <View style={styles.dropdownList}>
-                  {categories.map((cat) => (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setCategoryId(cat.id);
-                        setShowDropdown(false);
-                      }}
-                    >
-                      <Text>{cat.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </Field>
-
-            <Field label="Brief description">
-              <TextInput style={[styles.input, { minHeight: 70 }]} multiline value={description} onChangeText={setDescription} placeholder="Describe the identifiable stunt" />
-            </Field>
-
-            {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
-            <Button title={saving ? "Adding..." : "Add Identifiable"} onPress={submit} disabled={saving} loading={saving} />
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <Pressable style={[styles.modalBackdrop, { paddingTop: insets.top + 76 }]} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={() => {}}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.modalTitle}>Add Identifiable</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={{ color: colors.textMuted, fontSize: 20 }}>×</Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoider>
-      </View>
+
+          <Field label="Category">
+            <TouchableOpacity style={styles.dropdown} onPress={() => setShowDropdown((s) => !s)}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <IconIdCard size={16} color={colors.textMuted} />
+                <Text style={{ color: selected ? colors.text : colors.textMuted }}>{selected ? selected.label : "Select a category..."}</Text>
+              </View>
+              <IconChevronDown size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            {showDropdown && (
+              <View style={styles.dropdownList}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setCategoryId(cat.id);
+                      setShowDropdown(false);
+                    }}
+                  >
+                    <Text>{cat.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </Field>
+
+          <Field label="Brief description">
+            <TextInput style={[styles.input, { minHeight: 70 }]} multiline value={description} onChangeText={setDescription} placeholder="Describe the identifiable stunt" />
+          </Field>
+
+          {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
+          <Button title={saving ? "Adding..." : "Add Identifiable"} onPress={submit} disabled={saving} loading={saving} />
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -521,8 +558,8 @@ const styles = StyleSheet.create({
   idRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   idCategory: { fontSize: 12, fontWeight: "700", color: colors.tealDark },
   muted: { color: colors.textMuted, fontSize: 13, marginTop: 6 },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(2,30,36,0.5)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: colors.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 34 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(2,30,36,0.5)" },
+  modalCard: { backgroundColor: colors.white, borderRadius: 20, padding: 20, marginHorizontal: 16 },
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.tealDark, marginBottom: 16 },
   dropdown: {
     flexDirection: "row",

@@ -80,10 +80,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
 }
 
 const patchSchema = z.object({
-  natureOfEmployment: z.string().optional(),
-  areaItemId: z.string().optional(),
   jobDescription: z.string().optional(),
-  otherPerformersText: z.string().optional(),
   location: z.enum(["STUDIO", "UK", "OVERSEAS"]).optional(),
   riskAssessment: z.boolean().optional(),
   comments: z.string().optional(),
@@ -105,6 +102,34 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
     if (!body.success) return badRequest("Invalid fields.");
 
     await prisma.workRecord.update({ where: { id: params.id }, data: body.data });
+    return ok({ success: true });
+  } catch (err) {
+    return serverError(err);
+  }
+}
+
+// DELETE /api/work-records/:id — permanently remove an Ongoing production the performer no
+// longer wants. Restricted to ONGOING (same as edit) so nothing that's ever been through
+// Full Member or committee review can be deleted, preserving the audit trail spec §27 requires.
+export async function DELETE(req: NextRequest, { params: __params }: { params: Promise<{ id: string }> }) {
+  const params = await __params;
+  try {
+    const session = await getSession(req);
+    if (!session) return unauthorized();
+
+    const record = await prisma.workRecord.findUnique({ where: { id: params.id } });
+    if (!record) return notFound();
+    if (record.performerId !== session.id) return forbidden();
+    if (record.status !== "ONGOING") return forbidden("Only Ongoing records can be deleted.");
+
+    await prisma.$transaction([
+      prisma.workDate.deleteMany({ where: { workRecordId: record.id } }),
+      prisma.identifiable.deleteMany({ where: { workRecordId: record.id } }),
+      prisma.evidenceDocument.deleteMany({ where: { workRecordId: record.id } }),
+      prisma.workRecordPerformerLink.deleteMany({ where: { workRecordId: record.id } }),
+      prisma.workRecord.delete({ where: { id: record.id } }),
+    ]);
+
     return ok({ success: true });
   } catch (err) {
     return serverError(err);

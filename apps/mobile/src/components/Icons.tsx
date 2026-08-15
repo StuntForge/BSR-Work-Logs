@@ -224,3 +224,23 @@ export function IconPlus({ size, color = "#000", strokeWidth = 2.2 }: IconProps)
     </Svg>
   );
 }
+
+export function IconCheck({ size, color = "#000", strokeWidth = 2.4 }: IconProps) {
+  return (
+    <Svg {...base(size, color)}>
+      <Polyline points="5 12.5 9.5 17 19 6.5" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconTrash({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg {...base(size, color)}>
+      <Polyline points="4 7 20 7" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="10" y1="11" x2="10" y2="17" strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Line x1="14" y1="11" x2="14" y2="17" strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}

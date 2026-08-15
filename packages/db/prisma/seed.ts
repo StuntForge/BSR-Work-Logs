@@ -12,40 +12,41 @@ const GRADES = [
 ] as const;
 
 const AREA_CATEGORIES = [
-  { key: "A", label: "Falls / Descents", order: 1, items: ["High fall", "Stair fall", "Descender work"] },
-  { key: "B", label: "Fire / Explosive", order: 2, items: ["Full body burn", "Partial burn", "Explosive rig"] },
-  { key: "C", label: "Vehicle", order: 3, items: ["Precision driving", "Vehicle hit", "Motorbike work"] },
-  { key: "D", label: "Fighting / Combat", order: 4, items: ["Hand-to-hand", "Weapons combat", "Group melee"] },
-  { key: "E", label: "Water", order: 5, items: ["Underwater work", "Water fall", "Rapids/open water"] },
-  { key: "F", label: "Rigging / Wire work", order: 6, items: ["Wire fly", "Rope work", "Aerial rig"] },
+  { key: "VEH", label: "Vehicles", order: 1, items: [] as string[] },
+  { key: "AER", label: "Aerial and Wires", order: 2, items: [] as string[] },
+  { key: "ANI", label: "Animals", order: 3, items: [] as string[] },
+  { key: "WAT", label: "Water", order: 4, items: [] as string[] },
+  { key: "FIR", label: "Fire", order: 5, items: [] as string[] },
 ];
 
 // Illustrative thresholds for the 4 upgrade routes — placeholders BSR can tune later
 // (no dedicated admin UI for this in V1; spec §23 doesn't list it). MIN_TIME_AT_GRADE
-// targetValue is in whole days.
+// targetValue is in whole days. HEALTH_SAFETY targetValue is the required level (explicit BSR
+// policy: 1/2/3/4 rising with grade), set per member by the committee, never self-service.
 const REQUIREMENTS: Record<string, { type: string; targetValue: number }[]> = {
   STUNT_PERFORMER: [
     { type: "DAYS_WORKED", targetValue: 40 },
     { type: "IDENTIFIABLES", targetValue: 10 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 365 },
+    { type: "HEALTH_SAFETY", targetValue: 1 },
   ],
   SENIOR_STUNT_PERFORMER: [
     { type: "DAYS_WORKED", targetValue: 160 },
     { type: "IDENTIFIABLES", targetValue: 40 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 730 },
-    { type: "COORDINATOR_SPREAD", targetValue: 3 },
+    { type: "HEALTH_SAFETY", targetValue: 2 },
   ],
   KEY_STUNT_PERFORMER: [
     { type: "DAYS_WORKED", targetValue: 240 },
     { type: "IDENTIFIABLES", targetValue: 60 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 1095 },
-    { type: "COORDINATOR_SPREAD", targetValue: 4 },
+    { type: "HEALTH_SAFETY", targetValue: 3 },
   ],
   FULL_MEMBER: [
     { type: "DAYS_WORKED", targetValue: 320 },
     { type: "IDENTIFIABLES", targetValue: 80 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 1460 },
-    { type: "COORDINATOR_SPREAD", targetValue: 5 },
+    { type: "HEALTH_SAFETY", targetValue: 4 },
   ],
 };
 

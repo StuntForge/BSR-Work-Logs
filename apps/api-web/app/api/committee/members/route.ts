@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         currentGrade: gradeKey ? { key: gradeKey as any } : undefined,
         active: activeParam ? activeParam === "true" : undefined,
       },
-      include: { currentGrade: true },
+      include: { currentGrade: true, qualifications: { where: { type: "HEALTH_SAFETY" } } },
       orderBy: { name: "asc" },
     });
 
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
         email: u.email,
         active: u.active,
         currentGrade: u.currentGrade ? { key: u.currentGrade.key, label: u.currentGrade.label } : null,
+        healthSafetyLevel: u.qualifications[0]?.level ?? 0,
       })),
     });
   } catch (err) {

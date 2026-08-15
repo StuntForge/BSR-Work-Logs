@@ -33,6 +33,22 @@ const STATUS_TONE: Record<string, "green" | "amber" | "red" | "gray" | "teal"> =
   ARCHIVED: "gray",
 };
 
+// Rejected first (needs attention), then Ongoing, Submitted, Approved — each group sorted
+// newest-first by creation date. Anything else (e.g. Archived) sorts last.
+const STATUS_SORT_ORDER: Record<string, number> = { REJECTED: 0, ONGOING: 1, SUBMITTED: 2, APPROVED: 3 };
+
+function sortRecords(records: WorkRecordSummary[]): WorkRecordSummary[] {
+  return [...records].sort((a, b) => {
+    const orderDiff = (STATUS_SORT_ORDER[a.status] ?? 99) - (STATUS_SORT_ORDER[b.status] ?? 99);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function WorkListScreen() {
   const navigation = useNavigation<any>();
   const [tab, setTab] = useState<"ongoing" | "archive">("ongoing");
@@ -56,8 +72,8 @@ export default function WorkListScreen() {
   );
 
   const displayed = useMemo(() => {
-    if (tab !== "ongoing" || filter === "All") return allRecords;
-    return allRecords.filter((r) => r.status === filter.toUpperCase());
+    const filtered = tab !== "ongoing" || filter === "All" ? allRecords : allRecords.filter((r) => r.status === filter.toUpperCase());
+    return sortRecords(filtered);
   }, [allRecords, tab, filter]);
 
   return (
@@ -129,6 +145,7 @@ export default function WorkListScreen() {
               <IconClapperboard size={22} color={colors.tealDark} />
             </IconCircle>
             <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
               <Text style={styles.productionName}>{item.productionName}</Text>
               <View style={{ marginTop: 4, alignSelf: "flex-start" }}>
                 <Badge label={item.status} tone={STATUS_TONE[item.status] as any} />
@@ -177,6 +194,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
+  cardDate: { fontSize: 11, fontWeight: "600", color: colors.textMuted, marginBottom: 2 },
   productionName: { fontSize: 16, fontWeight: "800", color: colors.text },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
   meta: { fontSize: 12, color: colors.textMuted },

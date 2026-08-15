@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
-import { Card, Button, ProgressBar } from "../components/UI";
+import { Card, Button, ProgressBar, Badge } from "../components/UI";
 import { Header } from "../components/Header";
 import { ProgressRing } from "../components/ProgressRing";
 import { IconAward, IconCalendar, IconIdCard, IconShieldCheck } from "../components/Icons";
@@ -27,7 +27,6 @@ interface HomeData {
 const META: Record<string, { label: string; tone: "teal" | "green" | "blue" | "purple" | "amber"; ring: string }> = {
   DAYS_WORKED: { label: "Days worked", tone: "green", ring: colors.green },
   IDENTIFIABLES: { label: "Identifiables", tone: "blue", ring: colors.blue },
-  COORDINATOR_SPREAD: { label: "Coordinator spread", tone: "amber", ring: colors.amber },
   HEALTH_SAFETY: { label: "Health & Safety", tone: "purple", ring: colors.purple },
 };
 
@@ -93,7 +92,10 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header variant="main" extraHeight={70} />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+
+      {/* Sibling of the ScrollView (not inside it) — a negative-margin overlap gets clipped by
+          ScrollView's own bounds, so this card has to live outside it to cut into the banner. */}
+      <View style={styles.overlapWrap}>
         <Card style={styles.overallCard}>
           <View style={{ flex: 1 }}>
             <Text style={styles.overallLabel}>OVERALL PROGRESS</Text>
@@ -111,7 +113,9 @@ export default function HomeScreen() {
             </View>
           </View>
         </Card>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <Text style={styles.welcome}>Welcome back,</Text>
         <Text style={styles.name}>{data.name}</Text>
         {data.currentGrade && <Text style={styles.grade}>{data.currentGrade.label}</Text>}
@@ -152,16 +156,12 @@ export default function HomeScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.reqLabel, { color: colors.purple }]}>{meta.label.toUpperCase()}</Text>
-                    <Text style={styles.hsStatus}>{req.met ? "Completed" : "Not completed"}</Text>
-                    <Text style={styles.hsDesc}>Required for this upgrade</Text>
+                    <Text style={styles.hsStatus}>
+                      Level {req.approvedValue} of {req.targetValue} required
+                    </Text>
+                    <Text style={styles.hsDesc}>Set by the BSR committee — contact them to update your level.</Text>
                   </View>
-                </View>
-                <View style={{ marginTop: 12 }}>
-                  <Button
-                    title="View details"
-                    variant="secondary"
-                    onPress={() => Alert.alert("Health & Safety", "Contact the BSR office to arrange or confirm your Health & Safety qualification.")}
-                  />
+                  <Badge label={req.met ? "Met" : "Not met"} tone={req.met ? "green" : "amber"} />
                 </View>
               </Card>
             );
@@ -217,8 +217,9 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 18, paddingBottom: 60, gap: 14 },
-  overallCard: { flexDirection: "row", alignItems: "center", marginTop: -68, borderRadius: 22 },
+  content: { padding: 18, paddingTop: 14, paddingBottom: 60, gap: 14 },
+  overlapWrap: { marginTop: -56, marginHorizontal: 18, zIndex: 2 },
+  overallCard: { flexDirection: "row", alignItems: "center", borderRadius: 22 },
   overallLabel: { fontSize: 12, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.5 },
   overallSub: { fontSize: 12, color: colors.textMuted, marginTop: 8 },
   overallPercent: { fontSize: 24, fontWeight: "800", color: colors.tealDark },
@@ -248,6 +249,6 @@ const styles = StyleSheet.create({
   },
   footerPillText: { fontSize: 11, color: colors.textMuted, fontWeight: "600" },
   hsIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  hsStatus: { fontSize: 16, fontWeight: "800", color: colors.text, marginTop: 2 },
-  hsDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  hsStatus: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: 2 },
+  hsDesc: { fontSize: 11, color: colors.textMuted, marginTop: 3 },
 });

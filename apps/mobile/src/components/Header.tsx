@@ -12,11 +12,19 @@ const logo = require("../../assets/app-logo.png");
 const TALL_CONTENT_HEIGHT = 190;
 const SHORT_CONTENT_HEIGHT = 64;
 
+interface HeaderProps {
+  variant?: "main" | "detail";
+  title?: string;
+  extraHeight?: number;
+  /** detail variant only — an optional icon button on the right, e.g. a save tick. */
+  rightAction?: { icon: React.ReactNode; onPress: () => void };
+}
+
 // Shared banner header used at the top of every screen. `variant="main"` shows the full logo
-// lockup + sign out (Home/Work/Notifications); `variant="detail"` shows a back arrow + title
-// (Production detail, Review, New production). Height always includes the safe-area top inset
-// so content never sits under a notch/status bar.
-export function Header({ variant = "main", title, extraHeight = 0 }: { variant?: "main" | "detail"; title?: string; extraHeight?: number }) {
+// lockup + sign out (Home/Work/Notifications), anchored near the TOP of the banner; `variant=
+// "detail"` shows a back arrow + title (Production detail, Review, New production). Height
+// always includes the safe-area top inset so content never sits under a notch/status bar.
+export function Header({ variant = "main", title, extraHeight = 0, rightAction }: HeaderProps) {
   const navigation = useNavigation<any>();
   const { logout } = useAuth();
   const insets = useSafeAreaInsets();
@@ -27,7 +35,7 @@ export function Header({ variant = "main", title, extraHeight = 0 }: { variant?:
     <ImageBackground source={banner} style={[styles.banner, { height: contentHeight + insets.top }]} resizeMode="cover">
       <View style={styles.overlay} />
       {variant === "main" ? (
-        <View style={[styles.mainRow, { paddingBottom: 18 }]}>
+        <View style={[styles.mainRow, { paddingTop: insets.top + 20 }]}>
           <Image source={logo} style={styles.logo} resizeMode="contain" />
           <TouchableOpacity style={styles.signOut} onPress={logout} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.signOutText}>Sign out</Text>
@@ -39,7 +47,12 @@ export function Header({ variant = "main", title, extraHeight = 0 }: { variant?:
           <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <IconArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.detailTitle}>{title}</Text>
+          <Text style={[styles.detailTitle, { flex: 1 }]}>{title}</Text>
+          {rightAction && (
+            <TouchableOpacity onPress={rightAction.onPress} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              {rightAction.icon}
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </ImageBackground>
@@ -56,13 +69,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(2, 30, 36, 0.42)",
   },
   mainRow: {
-    flex: 1,
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
   logo: { width: 200, height: 88 },
-  signOut: { flexDirection: "row", alignItems: "center", gap: 6 },
+  signOut: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   signOutText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   detailTitle: { color: "#fff", fontSize: 20, fontWeight: "800" },

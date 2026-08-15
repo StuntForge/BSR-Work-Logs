@@ -85,18 +85,12 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
     } else if (def.type === "MIN_TIME_AT_GRADE") {
       const daysServed = Math.floor((Date.now() - openPeriod.startedAt.getTime()) / (1000 * 60 * 60 * 24));
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: daysServed, pendingValue: 0, met: daysServed >= def.targetValue });
-    } else if (def.type === "COORDINATOR_SPREAD") {
-      const approvedRecords = await prisma.workRecord.findMany({
-        where: { gradeHistoryId: openPeriod.id, performerId: userId, status: "APPROVED", fullMemberId: { not: null } },
-        select: { fullMemberId: true },
-        distinct: ["fullMemberId"],
-      });
-      const approvedValue = approvedRecords.length;
-      requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue, pendingValue: 0, met: approvedValue >= def.targetValue });
     } else if (def.type === "HEALTH_SAFETY") {
+      // Level is set by the committee, not the member (spec §25 workflow TBD; explicit policy:
+      // required level rises with grade). Met when their current level is at least what's required.
       const qualification = await prisma.qualification.findFirst({ where: { userId, type: "HEALTH_SAFETY" } });
-      const met = qualification?.status === "COMPLETE";
-      requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: met ? 1 : 0, pendingValue: 0, met });
+      const level = qualification?.level ?? 0;
+      requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: level, pendingValue: 0, met: level >= def.targetValue });
     } else {
       // SOLO_DAYS / CORE_JOBS / POINTS — architecture placeholder only, no capture mechanics yet (spec §24, §32).
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: 0, pendingValue: 0, met: false });
