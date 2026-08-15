@@ -42,6 +42,12 @@ export type IdentifiableStatus = (typeof IDENTIFIABLE_STATUS)[number];
 
 export const WORK_LOCATION = ["STUDIO", "UK", "OVERSEAS"] as const;
 export type WorkLocation = (typeof WORK_LOCATION)[number];
+// Display labels only — stored values stay STUDIO/UK/OVERSEAS to avoid a schema/data migration.
+export const WORK_LOCATION_LABELS: Record<WorkLocation, string> = {
+  STUDIO: "UK Studio",
+  UK: "Domestic Location",
+  OVERSEAS: "International",
+};
 
 export const UPGRADE_APPLICATION_STATUS = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type UpgradeApplicationStatus = (typeof UPGRADE_APPLICATION_STATUS)[number];

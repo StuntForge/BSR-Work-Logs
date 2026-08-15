@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
 import { Button } from "../components/UI";
 import { Header } from "../components/Header";
+import { KeyboardAvoider } from "../components/KeyboardAvoider";
 import { colors } from "../theme";
 
 export default function NewProductionScreen() {
@@ -31,14 +32,16 @@ export default function NewProductionScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header variant="detail" title="New production" />
-      <View style={styles.content}>
-        <Text style={styles.label}>Production name</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} autoFocus placeholder="e.g. The Long Ride" />
-        {error && <Text style={styles.error}>{error}</Text>}
-        <View style={{ marginTop: 16 }}>
-          <Button title={saving ? "Creating..." : "Create"} onPress={create} disabled={saving} loading={saving} />
+      <KeyboardAvoider>
+        <View style={styles.content}>
+          <Text style={styles.label}>Production name</Text>
+          <TextInput style={styles.input} value={name} onChangeText={setName} autoFocus placeholder="e.g. The Long Ride" />
+          {error && <Text style={styles.error}>{error}</Text>}
+          <View style={{ marginTop: 16 }}>
+            <Button title={saving ? "Creating..." : "Create"} onPress={create} disabled={saving} loading={saving} />
+          </View>
         </View>
-      </View>
+      </KeyboardAvoider>
     </View>
   );
 }

@@ -16,12 +16,10 @@ export interface SessionUser {
 }
 
 // No self-registration or email infra in V1 (spec §29) — committee relays this temp password
-// to the member directly; mustChangePassword forces them to set their own on first login.
+// to the member directly; mustChangePassword forces them to set their own on first login. Fixed
+// rather than random so the committee doesn't need to relay a unique string per account.
 export function generateTempPassword() {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let out = "";
-  for (let i = 0; i < 12; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+  return "ChangeMe123!";
 }
 
 export async function hashPassword(plain: string) {

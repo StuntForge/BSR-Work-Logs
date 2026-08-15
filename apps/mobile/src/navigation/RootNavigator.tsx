@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { ActivityIndicator, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../auth/AuthContext";
 import { BadgeProvider, useBadges } from "./BadgeContext";
 import { colors } from "../theme";
@@ -23,6 +24,7 @@ const Stack = createNativeStackNavigator();
 function MainTabs() {
   const { user } = useAuth();
   const { unreadNotifications, pendingApprovals } = useBadges();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -30,7 +32,13 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: "#ffffff",
         tabBarInactiveTintColor: "rgba(255,255,255,0.55)",
-        tabBarStyle: { backgroundColor: colors.tealDarkest, borderTopWidth: 0, height: 64, paddingBottom: 8, paddingTop: 8 },
+        tabBarStyle: {
+          backgroundColor: colors.tealDarkest,
+          borderTopWidth: 0,
+          height: 56 + insets.bottom,
+          paddingBottom: insets.bottom + 6,
+          paddingTop: 8,
+        },
         tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
       }}
     >

@@ -5,6 +5,7 @@ import { Calendar } from "react-native-calendars";
 import { apiFetch } from "../api/client";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
+import { KeyboardAvoider } from "../components/KeyboardAvoider";
 import { IconCalendar, IconDocument, IconIdCard, IconScale, IconCheckCircle, IconXCircle } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
@@ -44,10 +45,14 @@ export default function ReviewScreen() {
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  // Local, optimistic copy of workDates so rejecting a date updates the calendar instantly
+  // instead of waiting on the server round trip.
+  const [localDates, setLocalDates] = useState<RecordDetail["workDates"]>([]);
 
   const load = useCallback(async () => {
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
     setRecord(data.record);
+    setLocalDates(data.record.workDates);
   }, [id]);
 
   useFocusEffect(
@@ -65,11 +70,11 @@ export default function ReviewScreen() {
     );
   }
 
-  const claimedCount = record.workDates.filter((d) => d.status === "CLAIMED").length;
+  const claimedCount = localDates.filter((d) => d.status === "CLAIMED").length;
 
-  async function rejectDate(dateId: string) {
-    await apiFetch(`/api/work-records/${id}/dates/${dateId}/reject`, { method: "POST" });
-    load();
+  function rejectDate(dateId: string) {
+    setLocalDates((prev) => prev.map((d) => (d.id === dateId ? { ...d, status: "REJECTED" } : d)));
+    apiFetch(`/api/work-records/${id}/dates/${dateId}/reject`, { method: "POST" }).catch(() => load());
   }
 
   async function decideIdentifiable(identifiableId: string, action: "approve" | "reject" | "edit", verifiedDescription?: string) {
@@ -100,7 +105,7 @@ export default function ReviewScreen() {
   }
 
   const markedDates: Record<string, any> = {};
-  for (const d of record.workDates) {
+  for (const d of localDates) {
     markedDates[d.date.slice(0, 10)] = { selected: true, selectedColor: d.status === "REJECTED" ? colors.red : colors.green };
   }
 
@@ -109,7 +114,8 @@ export default function ReviewScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header variant="detail" title="Review" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAvoider>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>{record.performer.name}</Text>
         <Text style={styles.subtitle}>{record.productionName}</Text>
 
@@ -127,7 +133,7 @@ export default function ReviewScreen() {
                 markedDates={markedDates}
                 onDayPress={(day) => {
                   if (!isReviewable) return;
-                  const match = record.workDates.find((d) => d.date.slice(0, 10) === day.dateString && d.status === "CLAIMED");
+                  const match = localDates.find((d) => d.date.slice(0, 10) === day.dateString && d.status === "CLAIMED");
                   if (match) rejectDate(match.id);
                 }}
                 theme={{ selectedDayBackgroundColor: colors.green, todayTextColor: colors.green, arrowColor: colors.green }}
@@ -212,6 +218,7 @@ export default function ReviewScreen() {
           </Card>
         )}
       </ScrollView>
+      </KeyboardAvoider>
     </View>
   );
 }

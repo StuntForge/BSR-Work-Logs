@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
@@ -37,17 +37,17 @@ export default function WorkListScreen() {
   const navigation = useNavigation<any>();
   const [tab, setTab] = useState<"ongoing" | "archive">("ongoing");
   const [filter, setFilter] = useState("All");
-  const [records, setRecords] = useState<WorkRecordSummary[]>([]);
+  // Always the FULL, unfiltered set for the current tab — filtering happens client-side so the
+  // stat-strip counts stay global instead of collapsing to whatever the last filter returned.
+  const [allRecords, setAllRecords] = useState<WorkRecordSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ tab });
-    if (tab === "ongoing" && filter !== "All") params.set("status", filter);
-    const data = await apiFetch<{ records: WorkRecordSummary[] }>(`/api/work-records?${params.toString()}`);
-    setRecords(data.records);
+    const data = await apiFetch<{ records: WorkRecordSummary[] }>(`/api/work-records?tab=${tab}`);
+    setAllRecords(data.records);
     setLoading(false);
-  }, [tab, filter]);
+  }, [tab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,12 +55,17 @@ export default function WorkListScreen() {
     }, [load])
   );
 
+  const displayed = useMemo(() => {
+    if (tab !== "ongoing" || filter === "All") return allRecords;
+    return allRecords.filter((r) => r.status === filter.toUpperCase());
+  }, [allRecords, tab, filter]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header variant="main" />
       <FlatList
         contentContainerStyle={styles.content}
-        data={records}
+        data={displayed}
         keyExtractor={(r) => r.id}
         refreshing={loading}
         onRefresh={load}
@@ -78,8 +83,15 @@ export default function WorkListScreen() {
 
             <View style={styles.tabs}>
               {(["ongoing", "archive"] as const).map((t) => (
-                <TouchableOpacity key={t} style={styles.tab} onPress={() => setTab(t)}>
-                  <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t === "ongoing" ? "Ongoing" : "Archive"}</Text>
+                <TouchableOpacity
+                  key={t}
+                  style={styles.tab}
+                  onPress={() => {
+                    setTab(t);
+                    setFilter("All");
+                  }}
+                >
+                  <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t === "ongoing" ? "Qualifying Work" : "Archive"}</Text>
                   {tab === t && <View style={styles.tabUnderline} />}
                 </TouchableOpacity>
               ))}
@@ -89,16 +101,15 @@ export default function WorkListScreen() {
               <Card style={styles.statStrip}>
                 {FILTERS.map((f, i) => {
                   const active = filter === f.key;
-                  const count = f.key === "All" ? records.length : records.filter((r) => r.status === f.key.toUpperCase()).length;
+                  const count = f.key === "All" ? allRecords.length : allRecords.filter((r) => r.status === f.key.toUpperCase()).length;
+                  const toneColor = ({ teal: colors.tealDark, amber: colors.amber, green: colors.green, red: colors.red } as any)[f.tone];
                   return (
                     <React.Fragment key={f.key}>
                       <TouchableOpacity style={[styles.statCell, active && styles.statCellActive]} onPress={() => setFilter(f.key)}>
                         <IconCircle tone={f.tone} size={40}>
-                          {f.icon(active ? "#fff" : ({ teal: colors.tealDark, amber: colors.amber, green: colors.green, red: colors.red } as any)[f.tone])}
+                          {f.icon(active ? "#fff" : toneColor)}
                         </IconCircle>
-                        <Text style={[styles.statCount, { color: ({ teal: colors.tealDark, amber: colors.amber, green: colors.green, red: colors.red } as any)[f.tone] }]}>
-                          {f.key === "All" || f.key === "Ongoing" ? (tab === "ongoing" ? count : "–") : count}
-                        </Text>
+                        <Text style={[styles.statCount, { color: toneColor }]}>{count}</Text>
                         <Text style={styles.statLabel}>{f.label}</Text>
                       </TouchableOpacity>
                       {i < FILTERS.length - 1 && <View style={styles.statDivider} />}
@@ -108,7 +119,7 @@ export default function WorkListScreen() {
               </Card>
             )}
 
-            <Text style={styles.sectionLabel}>{tab === "ongoing" ? "ONGOING JOBS" : "ARCHIVED JOBS"}</Text>
+            <Text style={styles.sectionLabel}>{tab === "ongoing" ? "QUALIFYING WORK" : "ARCHIVED JOBS"}</Text>
           </>
         }
         ListEmptyComponent={!loading ? <Text style={styles.muted}>Nothing here yet.</Text> : null}

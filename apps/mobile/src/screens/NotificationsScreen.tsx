@@ -4,7 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
 import { IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
-import { IconAward, IconClipboardCheck, IconCalendar } from "../components/Icons";
+import { IconAward, IconClipboardCheck } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
 
@@ -20,8 +20,15 @@ interface Notification {
 function iconFor(n: Notification) {
   const positive = !/reject/i.test(n.title);
   const tone = positive ? "green" : "red";
-  if (n.type === "UPGRADE_DECISION") return { icon: <IconAward size={20} color={positive ? colors.green : colors.red} />, tone: tone as const };
-  return { icon: <IconClipboardCheck size={20} color={positive ? colors.green : colors.red} />, tone: tone as const };
+  if (n.type === "UPGRADE_DECISION") return { icon: <IconAward size={18} color={positive ? colors.green : colors.red} />, tone: tone as const };
+  return { icon: <IconClipboardCheck size={18} color={positive ? colors.green : colors.red} />, tone: tone as const };
+}
+
+function formatWhen(iso: string) {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
 }
 
 export default function NotificationsScreen() {
@@ -64,17 +71,22 @@ export default function NotificationsScreen() {
           const { icon, tone } = iconFor(item);
           return (
             <TouchableOpacity style={styles.card} onPress={() => markRead(item)}>
-              {!item.readAt && <View style={styles.unreadDot} />}
-              <IconCircle tone={tone} size={44}>
+              <IconCircle tone={tone} size={34}>
                 {icon}
               </IconCircle>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.notifTitle}>{item.title}</Text>
-                <Text style={styles.notifBody}>{item.body}</Text>
-                <View style={styles.metaRow}>
-                  <IconCalendar size={12} color={colors.textMuted} />
-                  <Text style={styles.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={styles.topRow}>
+                  <View style={styles.titleRow}>
+                    {!item.readAt && <View style={styles.unreadDot} />}
+                    <Text style={styles.notifTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                  </View>
+                  <Text style={styles.when}>{formatWhen(item.createdAt)}</Text>
                 </View>
+                <Text style={styles.notifBody} numberOfLines={2}>
+                  {item.body}
+                </Text>
               </View>
             </TouchableOpacity>
           );
@@ -91,17 +103,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
-    position: "relative",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
   },
-  unreadDot: { position: "absolute", top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.teal },
-  notifTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
-  notifBody: { fontSize: 13, color: colors.textMuted, marginTop: 3 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
-  meta: { fontSize: 11, color: colors.textMuted },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.teal },
+  notifTitle: { fontSize: 14, fontWeight: "800", color: colors.text, flexShrink: 1 },
+  notifBody: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  when: { fontSize: 10, color: colors.textMuted, marginLeft: 8 },
   muted: { color: colors.textMuted, textAlign: "center", marginTop: 40 },
 });

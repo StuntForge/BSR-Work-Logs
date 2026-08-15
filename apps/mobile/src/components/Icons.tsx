@@ -161,6 +161,14 @@ export function IconChevronRight({ size, color = "#000", strokeWidth = 2 }: Icon
   );
 }
 
+export function IconChevronDown({ size, color = "#000", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg {...base(size, color)}>
+      <Polyline points="6 9 12 15 18 9" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function IconArrowLeft({ size, color = "#000", strokeWidth = 2 }: IconProps) {
   return (
     <Svg {...base(size, color)}>

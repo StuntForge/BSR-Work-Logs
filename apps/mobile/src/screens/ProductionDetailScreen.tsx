@@ -1,44 +1,45 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, TextInput, StyleSheet, ScrollView, Switch, TouchableOpacity, ActivityIndicator } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, TextInput, StyleSheet, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { Calendar } from "react-native-calendars";
 import * as DocumentPicker from "expo-document-picker";
 import { apiFetch, API_URL } from "../api/client";
 import { getToken } from "../api/storage";
-import { Card, Button, Badge } from "../components/UI";
+import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
+import { KeyboardAvoider } from "../components/KeyboardAvoider";
+import { IconIdCard, IconChevronDown, IconPlus } from "../components/Icons";
 import { colors } from "../theme";
-import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION } from "@bsr/shared";
+import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION, WORK_LOCATION_LABELS } from "@bsr/shared";
 
-interface AreaItem {
-  id: string;
-  label: string;
-}
 interface AreaCategory {
   id: string;
   key: string;
   label: string;
-  items: AreaItem[];
+}
+interface WorkDate {
+  id: string;
+  date: string;
+  status: string;
 }
 interface RecordDetail {
   id: string;
   productionName: string;
   status: string;
   hasSpawnedContinuation: boolean;
-  natureOfEmployment: string | null;
-  areaItem: { id: string; label: string; category: string } | null;
   jobDescription: string | null;
-  otherPerformersText: string | null;
   location: string | null;
   riskAssessment: boolean | null;
   comments: string | null;
-  workDates: { id: string; date: string; status: string }[];
+  workDates: WorkDate[];
   approvedDays: number;
   identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string }[];
   evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
   fullMember: { id: string; name: string } | null;
   latestDecision: { decision: string; message: string | null } | null;
 }
+
+const ADD_DATES_DEBOUNCE_MS = 700;
 
 export default function ProductionDetailScreen() {
   const navigation = useNavigation<any>();
@@ -50,18 +51,13 @@ export default function ProductionDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   // Editable field state (only meaningful while status === ONGOING)
-  const [natureOfEmployment, setNatureOfEmployment] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [otherPerformersText, setOtherPerformersText] = useState("");
   const [location, setLocation] = useState<string | null>(null);
   const [riskAssessment, setRiskAssessment] = useState(false);
   const [comments, setComments] = useState("");
-  const [areaItemId, setAreaItemId] = useState<string | null>(null);
-  const [showAreaPicker, setShowAreaPicker] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
 
-  const [newIdCategoryId, setNewIdCategoryId] = useState<string | null>(null);
-  const [newIdDescription, setNewIdDescription] = useState("");
+  const [showIdModal, setShowIdModal] = useState(false);
 
   const [fmQuery, setFmQuery] = useState("");
   const [fmResults, setFmResults] = useState<{ id: string; name: string }[]>([]);
@@ -69,16 +65,21 @@ export default function ProductionDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Local, optimistic calendar state so taps feel instant instead of waiting on a round trip
+  // per date. Adds are batched and sent together after a short pause; removes fire in the
+  // background without blocking the UI.
+  const [localDates, setLocalDates] = useState<WorkDate[]>([]);
+  const pendingAddsRef = useRef<Set<string>>(new Set());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const load = useCallback(async () => {
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
     setRecord(data.record);
-    setNatureOfEmployment(data.record.natureOfEmployment ?? "");
     setJobDescription(data.record.jobDescription ?? "");
-    setOtherPerformersText(data.record.otherPerformersText ?? "");
     setLocation(data.record.location);
     setRiskAssessment(!!data.record.riskAssessment);
     setComments(data.record.comments ?? "");
-    setAreaItemId(data.record.areaItem?.id ?? null);
+    setLocalDates(data.record.workDates);
     setLoading(false);
   }, [id]);
 
@@ -122,7 +123,7 @@ export default function ProductionDetailScreen() {
     try {
       await apiFetch(`/api/work-records/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ natureOfEmployment, jobDescription, otherPerformersText, location, riskAssessment, comments, areaItemId: areaItemId ?? undefined }),
+        body: JSON.stringify({ jobDescription, location, riskAssessment, comments }),
       });
       await load();
     } catch (err: any) {
@@ -132,23 +133,36 @@ export default function ProductionDetailScreen() {
     }
   }
 
-  async function toggleDate(dateStr: string) {
-    const existing = record!.workDates.find((d) => d.date.slice(0, 10) === dateStr);
-    if (existing) {
-      await apiFetch(`/api/work-records/${id}/dates/${existing.id}`, { method: "DELETE" });
-    } else {
-      await apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: [dateStr] }) });
+  async function flushPendingAdds() {
+    const toAdd = Array.from(pendingAddsRef.current);
+    pendingAddsRef.current.clear();
+    if (toAdd.length === 0) return;
+    try {
+      await apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: toAdd }) });
+    } finally {
+      load();
     }
-    load();
   }
 
-  async function addIdentifiable() {
-    if (!newIdCategoryId || !newIdDescription.trim()) return;
+  function toggleDate(dateStr: string) {
+    const existing = localDates.find((d) => d.date.slice(0, 10) === dateStr);
+    if (existing) {
+      setLocalDates((prev) => prev.filter((d) => d.id !== existing.id));
+      apiFetch(`/api/work-records/${id}/dates/${existing.id}`, { method: "DELETE" }).catch(() => load());
+    } else {
+      setLocalDates((prev) => [...prev, { id: `pending-${dateStr}`, date: dateStr, status: "CLAIMED" }]);
+      pendingAddsRef.current.add(dateStr);
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = setTimeout(flushPendingAdds, ADD_DATES_DEBOUNCE_MS);
+    }
+  }
+
+  async function addIdentifiable(categoryId: string, description: string) {
     await apiFetch(`/api/work-records/${id}/identifiables`, {
       method: "POST",
-      body: JSON.stringify({ categoryId: newIdCategoryId, performerDescription: newIdDescription.trim() }),
+      body: JSON.stringify({ categoryId, performerDescription: description }),
     });
-    setNewIdDescription("");
+    setShowIdModal(false);
     load();
   }
 
@@ -211,18 +225,17 @@ export default function ProductionDetailScreen() {
   }
 
   const markedDates: Record<string, any> = {};
-  for (const d of record.workDates) {
+  for (const d of localDates) {
     const key = d.date.slice(0, 10);
     markedDates[key] = { selected: true, selectedColor: d.status === "REJECTED" ? colors.red : colors.green };
   }
-
-  const selectedCategory = categories.find((c) => c.items.some((i) => i.id === areaItemId));
-  const selectedItem = selectedCategory?.items.find((i) => i.id === areaItemId);
+  const approvedDaysDisplay = localDates.filter((d) => d.status === "CLAIMED").length;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header variant="detail" title="Production" />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
+      <KeyboardAvoider>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View style={styles.rowBetween}>
           <Text style={styles.title}>{record.productionName}</Text>
           <Badge
@@ -248,7 +261,7 @@ export default function ProductionDetailScreen() {
         )}
 
         <Card style={{ marginTop: 12 }}>
-          <Text style={styles.sectionLabel}>Work dates — {record.approvedDays} approved</Text>
+          <Text style={styles.sectionLabel}>Work dates — {approvedDaysDisplay} approved</Text>
           <Calendar
             markedDates={markedDates}
             onDayPress={(day) => isOwnerOngoing && toggleDate(day.dateString)}
@@ -260,54 +273,19 @@ export default function ProductionDetailScreen() {
         <Card style={{ marginTop: 12 }}>
           <Text style={styles.sectionLabel}>Work record details</Text>
 
-          <Field label="Area of Work">
-            <TouchableOpacity style={styles.selectBox} onPress={() => isOwnerOngoing && setShowAreaPicker((s) => !s)}>
-              <Text>{selectedCategory && selectedItem ? `${selectedCategory.label} — ${selectedItem.label}` : "Select..."}</Text>
-            </TouchableOpacity>
-            {showAreaPicker && (
-              <View style={styles.pickerList}>
-                {categories.map((cat) => (
-                  <View key={cat.id}>
-                    <Text style={styles.pickerCategory}>{cat.key}. {cat.label}</Text>
-                    {cat.items.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={styles.pickerItem}
-                        onPress={() => {
-                          setAreaItemId(item.id);
-                          setShowAreaPicker(false);
-                        }}
-                      >
-                        <Text>{item.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
-          </Field>
-
-          <Field label="Nature of employment">
-            <TextInput style={styles.input} value={natureOfEmployment} onChangeText={setNatureOfEmployment} editable={isOwnerOngoing} />
-          </Field>
-
           <Field label="Job description">
             <TextInput style={[styles.input, { minHeight: 60 }]} multiline value={jobDescription} onChangeText={setJobDescription} editable={isOwnerOngoing} />
           </Field>
 
-          <Field label="Other stunt performers">
-            <TextInput style={styles.input} value={otherPerformersText} onChangeText={setOtherPerformersText} editable={isOwnerOngoing} />
-          </Field>
-
           <Field label="Location">
-            <View style={styles.row}>
+            <View style={styles.rowWrap}>
               {WORK_LOCATION.map((loc) => (
                 <TouchableOpacity
                   key={loc}
                   style={[styles.chip, location === loc && styles.chipActive]}
                   onPress={() => isOwnerOngoing && setLocation(loc)}
                 >
-                  <Text style={[styles.chipText, location === loc && styles.chipTextActive]}>{loc}</Text>
+                  <Text style={[styles.chipText, location === loc && styles.chipTextActive]}>{WORK_LOCATION_LABELS[loc]}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -332,7 +310,11 @@ export default function ProductionDetailScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.idCategory}>{idf.category.label}</Text>
                 <Text>{idf.verifiedDescription ?? idf.performerDescription}</Text>
-                {idf.status !== "SUBMITTED" && <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />}
+                {idf.status !== "SUBMITTED" && (
+                  <View style={{ marginTop: 4 }}>
+                    <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />
+                  </View>
+                )}
               </View>
               {isOwnerOngoing && (
                 <TouchableOpacity onPress={() => removeIdentifiable(idf.id)}>
@@ -345,23 +327,7 @@ export default function ProductionDetailScreen() {
 
           {isOwnerOngoing && (
             <View style={{ marginTop: 12 }}>
-              <Field label="Category">
-                <View style={styles.rowWrap}>
-                  {categories.map((cat) => (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={[styles.chip, newIdCategoryId === cat.id && styles.chipActive]}
-                      onPress={() => setNewIdCategoryId(cat.id)}
-                    >
-                      <Text style={[styles.chipText, newIdCategoryId === cat.id && styles.chipTextActive]}>{cat.key}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </Field>
-              <Field label="Brief description">
-                <TextInput style={styles.input} value={newIdDescription} onChangeText={setNewIdDescription} />
-              </Field>
-              <Button title="Add identifiable" variant="secondary" onPress={addIdentifiable} />
+              <Button title="Add Identifiable" variant="secondary" icon={<IconPlus size={16} color={colors.text} />} onPress={() => setShowIdModal(true)} />
             </View>
           )}
         </Card>
@@ -424,7 +390,109 @@ export default function ProductionDetailScreen() {
           </Card>
         )}
       </ScrollView>
+      </KeyboardAvoider>
+
+      <AddIdentifiableModal visible={showIdModal} categories={categories} onClose={() => setShowIdModal(false)} onAdd={addIdentifiable} />
     </View>
+  );
+}
+
+function AddIdentifiableModal({
+  visible,
+  categories,
+  onClose,
+  onAdd,
+}: {
+  visible: boolean;
+  categories: AreaCategory[];
+  onClose: () => void;
+  onAdd: (categoryId: string, description: string) => Promise<void>;
+}) {
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setCategoryId(null);
+      setDescription("");
+      setError(null);
+      setShowDropdown(false);
+    }
+  }, [visible]);
+
+  const selected = categories.find((c) => c.id === categoryId);
+
+  async function submit() {
+    if (!categoryId) {
+      setError("Select a category.");
+      return;
+    }
+    if (!description.trim()) {
+      setError("Enter a brief description.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onAdd(categoryId, description.trim());
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <KeyboardAvoider>
+          <View style={styles.modalCard}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.modalTitle}>Add Identifiable</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Text style={{ color: colors.textMuted, fontSize: 20 }}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Field label="Category">
+              <TouchableOpacity style={styles.dropdown} onPress={() => setShowDropdown((s) => !s)}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <IconIdCard size={16} color={colors.textMuted} />
+                  <Text style={{ color: selected ? colors.text : colors.textMuted }}>{selected ? selected.label : "Select a category..."}</Text>
+                </View>
+                <IconChevronDown size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+              {showDropdown && (
+                <View style={styles.dropdownList}>
+                  {categories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setCategoryId(cat.id);
+                        setShowDropdown(false);
+                      }}
+                    >
+                      <Text>{cat.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </Field>
+
+            <Field label="Brief description">
+              <TextInput style={[styles.input, { minHeight: 70 }]} multiline value={description} onChangeText={setDescription} placeholder="Describe the identifiable stunt" />
+            </Field>
+
+            {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
+            <Button title={saving ? "Adding..." : "Add Identifiable"} onPress={submit} disabled={saving} loading={saving} />
+          </View>
+        </KeyboardAvoider>
+      </View>
+    </Modal>
   );
 }
 
@@ -438,22 +506,35 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 20, fontWeight: "800", color: colors.greenDark, flexShrink: 1, marginRight: 8 },
+  title: { fontSize: 20, fontWeight: "800", color: colors.tealDark, flexShrink: 1, marginRight: 8 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   row: { flexDirection: "row", gap: 8 },
   rowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   sectionLabel: { fontSize: 13, fontWeight: "700", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 },
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, backgroundColor: colors.white },
-  selectBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.white },
-  pickerList: { marginTop: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 8, maxHeight: 260 },
-  pickerCategory: { fontWeight: "700", marginTop: 8, color: colors.greenDark },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, backgroundColor: colors.white },
   pickerItem: { paddingVertical: 8, paddingHorizontal: 6 },
-  chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.greenLight },
-  chipActive: { backgroundColor: colors.green },
-  chipText: { fontSize: 12, fontWeight: "600", color: colors.greenDark },
+  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.tealLight },
+  chipActive: { backgroundColor: colors.teal },
+  chipText: { fontSize: 12, fontWeight: "600", color: colors.tealDark },
   chipTextActive: { color: colors.white },
   idRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  idCategory: { fontSize: 12, fontWeight: "700", color: colors.greenDark },
+  idCategory: { fontSize: 12, fontWeight: "700", color: colors.tealDark },
   muted: { color: colors.textMuted, fontSize: 13, marginTop: 6 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(2,30,36,0.5)", justifyContent: "flex-end" },
+  modalCard: { backgroundColor: colors.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 34 },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: colors.tealDark, marginBottom: 16 },
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: colors.white,
+  },
+  dropdownList: { marginTop: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.white, overflow: "hidden" },
+  dropdownItem: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
 });

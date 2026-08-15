@@ -1,14 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
 import { Card, Button, ProgressBar } from "../components/UI";
 import { Header } from "../components/Header";
 import { ProgressRing } from "../components/ProgressRing";
 import { IconAward, IconCalendar, IconIdCard, IconShieldCheck } from "../components/Icons";
 import { colors } from "../theme";
-import { computeElapsed, formatElapsed } from "../utils/time";
 
 interface Requirement {
   type: string;
@@ -27,7 +25,6 @@ interface HomeData {
 }
 
 const META: Record<string, { label: string; tone: "teal" | "green" | "blue" | "purple" | "amber"; ring: string }> = {
-  MIN_TIME_AT_GRADE: { label: "Time at grade", tone: "teal", ring: colors.teal },
   DAYS_WORKED: { label: "Days worked", tone: "green", ring: colors.green },
   IDENTIFIABLES: { label: "Identifiables", tone: "blue", ring: colors.blue },
   COORDINATOR_SPREAD: { label: "Coordinator spread", tone: "amber", ring: colors.amber },
@@ -41,7 +38,6 @@ function addDays(iso: string, days: number) {
 }
 
 export default function HomeScreen() {
-  const { user } = useAuth();
   const [data, setData] = useState<HomeData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -91,9 +87,12 @@ export default function HomeScreen() {
   const totalCount = data.requirements.length;
   const overallPercent = totalCount > 0 ? Math.round(data.requirements.reduce((sum, r) => sum + Math.min(100, (r.approvedValue / Math.max(r.targetValue, 1)) * 100), 0) / totalCount) : 0;
 
+  const timeReq = data.requirements.find((r) => r.type === "MIN_TIME_AT_GRADE");
+  const otherReqs = data.requirements.filter((r) => r.type !== "MIN_TIME_AT_GRADE");
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header variant="main" />
+      <Header variant="main" extraHeight={70} />
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <Card style={styles.overallCard}>
           <View style={{ flex: 1 }}>
@@ -122,7 +121,26 @@ export default function HomeScreen() {
           <Text style={styles.targetLine}>You have reached the top grade in this system.</Text>
         )}
 
-        {data.requirements.map((req) => {
+        {timeReq && (
+          <View style={styles.timeBar}>
+            <View style={styles.timeBarTop}>
+              <View style={styles.row}>
+                <IconCalendar size={13} color={colors.tealDark} />
+                <Text style={styles.timeBarLabel}>DAYS SINCE LAST UPGRADE</Text>
+              </View>
+              <Text style={styles.timeBarValue}>
+                {timeReq.approvedValue} / {timeReq.targetValue} days
+              </Text>
+            </View>
+            <ProgressBar value={timeReq.approvedValue} max={timeReq.targetValue} color={colors.tealDark} trackColor={colors.tealLight} />
+            <Text style={styles.timeBarSub}>
+              Minimum required: {Math.round(timeReq.targetValue / 365)} years
+              {data.gradePeriodStartedAt ? ` · Earliest upgrade date: ${addDays(data.gradePeriodStartedAt, timeReq.targetValue)}` : ""}
+            </Text>
+          </View>
+        )}
+
+        {otherReqs.map((req) => {
           const meta = META[req.type] ?? { label: req.type, tone: "teal" as const, ring: colors.teal };
 
           if (req.type === "HEALTH_SAFETY") {
@@ -150,33 +168,24 @@ export default function HomeScreen() {
           }
 
           const percent = req.targetValue > 0 ? Math.min(100, (req.approvedValue / req.targetValue) * 100) : 0;
-          const isTime = req.type === "MIN_TIME_AT_GRADE";
           const remaining = Math.max(0, req.targetValue - req.approvedValue);
 
           return (
             <Card key={req.type} style={styles.reqCard}>
               <View style={{ flexDirection: "row", gap: 16 }}>
-                <ProgressRing
-                  percent={percent}
-                  color={meta.ring}
-                  centerLabel={`${Math.round(percent)}%`}
-                  subLabel={isTime ? `${(req.approvedValue / 365).toFixed(2)}/${Math.round(req.targetValue / 365)}\nYEARS` : `${req.approvedValue}/${req.targetValue}`}
-                />
+                <ProgressRing percent={percent} color={meta.ring} centerLabel={`${Math.round(percent)}%`} subLabel={`${req.approvedValue}/${req.targetValue}`} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.reqLabel, { color: meta.ring }]}>{(isTime ? "Days since last upgrade" : meta.label).toUpperCase()}</Text>
+                  <Text style={[styles.reqLabel, { color: meta.ring }]}>{meta.label.toUpperCase()}</Text>
                   <Text style={styles.reqStat}>
-                    {isTime ? `${req.approvedValue} days` : `${req.approvedValue} / ${req.targetValue} approved`}
+                    {req.approvedValue} / {req.targetValue} approved
                   </Text>
-                  {isTime && <Text style={styles.reqMinimum}>Minimum required: {Math.round(req.targetValue / 365)} years</Text>}
                   <View style={{ marginTop: 8 }}>
                     <ProgressBar value={req.approvedValue} max={req.targetValue} color={meta.ring} trackColor={colors.border} />
                   </View>
                   <View style={styles.footerPill}>
-                    {isTime ? <IconCalendar size={14} color={colors.textMuted} /> : <IconIdCard size={14} color={colors.textMuted} />}
+                    <IconIdCard size={14} color={colors.textMuted} />
                     <Text style={styles.footerPillText}>
-                      {isTime && data.gradePeriodStartedAt
-                        ? `Earliest upgrade date: ${addDays(data.gradePeriodStartedAt, req.targetValue)}`
-                        : `${remaining} ${req.type === "DAYS_WORKED" ? "days" : "items"} remaining`}
+                      {remaining} {req.type === "DAYS_WORKED" ? "days" : "items"} remaining
                     </Text>
                   </View>
                 </View>
@@ -209,7 +218,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 18, paddingBottom: 60, gap: 14 },
-  overallCard: { flexDirection: "row", alignItems: "center", marginTop: -34 },
+  overallCard: { flexDirection: "row", alignItems: "center", marginTop: -68, borderRadius: 22 },
   overallLabel: { fontSize: 12, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.5 },
   overallSub: { fontSize: 12, color: colors.textMuted, marginTop: 8 },
   overallPercent: { fontSize: 24, fontWeight: "800", color: colors.tealDark },
@@ -217,10 +226,15 @@ const styles = StyleSheet.create({
   name: { fontSize: 26, fontWeight: "800", color: colors.text },
   grade: { fontSize: 16, fontWeight: "700", color: colors.tealDark, marginTop: 2 },
   targetLine: { fontSize: 13, color: colors.textMuted, marginBottom: 4 },
+  row: { flexDirection: "row", alignItems: "center", gap: 6 },
+  timeBar: { marginTop: 2 },
+  timeBarTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  timeBarLabel: { fontSize: 11, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.5 },
+  timeBarValue: { fontSize: 12, fontWeight: "700", color: colors.text },
+  timeBarSub: { fontSize: 11, color: colors.textMuted, marginTop: 6 },
   reqCard: {},
   reqLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
   reqStat: { fontSize: 17, fontWeight: "800", color: colors.text, marginTop: 4 },
-  reqMinimum: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   footerPill: {
     flexDirection: "row",
     alignItems: "center",
