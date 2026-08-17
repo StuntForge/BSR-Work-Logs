@@ -114,7 +114,7 @@ export function ReviewClient({ id }: { id: string }) {
                 <td>
                   {p.evidenceDocuments.length === 0 && <span className="muted">None</span>}
                   {p.evidenceDocuments.map((doc) => (
-                    <a key={doc.id} href={doc.fileUrl} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                    <a key={doc.id} href={`/api/work-records/${p.workRecordId}/evidence/${doc.id}`} target="_blank" rel="noreferrer" style={{ display: "block" }}>
                       {doc.fileName}
                     </a>
                   ))}

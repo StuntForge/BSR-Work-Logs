@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 import { EVIDENCE_ALLOWED_MIME_TYPES, EVIDENCE_MAX_BYTES } from "@bsr/shared";
 
 export function validateEvidenceFile(mimeType: string, sizeBytes: number) {
@@ -11,11 +11,16 @@ export function validateEvidenceFile(mimeType: string, sizeBytes: number) {
   return null;
 }
 
+// Private Blob store (spec §29 "authenticated/private storage") — the blob itself requires
+// authentication to read, not just an unguessable URL. Returns the pathname, which is what
+// EvidenceDocument.fileUrl stores; serving it back to a user goes through an authenticated
+// route that calls fetchEvidence() below, never a direct link to the blob store.
 export async function uploadEvidence(workRecordId: string, fileName: string, file: Blob) {
   const key = `evidence/${workRecordId}/${Date.now()}-${fileName}`;
-  const result = await put(key, file, { access: "public" });
-  // NOTE: Vercel Blob's "public" access still requires the unguessable URL; route-level auth
-  // (spec §29 "authenticated/private storage") is enforced by only ever returning this URL
-  // through authenticated API responses, never indexing/listing it publicly.
-  return result.url;
+  const result = await put(key, file, { access: "private" });
+  return result.pathname;
+}
+
+export async function fetchEvidence(pathname: string) {
+  return get(pathname, { access: "private" });
 }
