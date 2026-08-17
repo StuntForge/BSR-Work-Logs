@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { effectiveGradeStart } from "@/lib/eligibility";
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
 async function loadRecordWithDetail(id: string) {
@@ -9,7 +10,7 @@ async function loadRecordWithDetail(id: string) {
     where: { id },
     include: {
       productionFamily: true,
-      performer: { select: { id: true, name: true } },
+      performer: { select: { id: true, name: true, lastUpgradedAt: true, dateJoined: true } },
       fullMember: { select: { id: true, name: true } },
       areaItem: { include: { category: true } },
       workDates: { orderBy: { date: "asc" } },
@@ -17,6 +18,7 @@ async function loadRecordWithDetail(id: string) {
       evidenceDocuments: true,
       workApprovals: { orderBy: { decidedAt: "desc" } },
       otherPerformerLinks: true,
+      gradeHistory: true,
     },
   });
 }
@@ -41,6 +43,10 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         ? `Cont ${record.continuationSequence}: ${record.productionFamily.rootName}`
         : record.productionFamily.rootName;
 
+    // Earliest date the performer is allowed to claim on this record's calendar — lets the
+    // client disable/block those dates directly instead of only rejecting them after a tap.
+    const eligibleFromDate = effectiveGradeStart(record.performer, record.gradeHistory.startedAt);
+
     return ok({
       record: {
         id: record.id,
@@ -49,8 +55,9 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         continuationSequence: record.continuationSequence,
         hasSpawnedContinuation: record.hasSpawnedContinuation,
         status: record.status,
-        performer: record.performer,
+        performer: { id: record.performer.id, name: record.performer.name },
         fullMember: record.fullMember,
+        eligibleFromDate: eligibleFromDate.toISOString(),
         natureOfEmployment: record.natureOfEmployment,
         areaItem: record.areaItem ? { id: record.areaItem.id, label: record.areaItem.label, category: record.areaItem.category.label } : null,
         jobDescription: record.jobDescription,

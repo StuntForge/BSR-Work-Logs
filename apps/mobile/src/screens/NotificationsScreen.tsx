@@ -118,10 +118,10 @@ export default function NotificationsScreen() {
         onRefresh={load}
         ListHeaderComponent={
           <View style={styles.headerRow}>
+            <Text style={styles.title}>Notifications</Text>
             <TouchableOpacity onPress={confirmClearAll} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={[styles.clearAll, notifications.length === 0 && { opacity: 0.4 }]}>Clear all</Text>
             </TouchableOpacity>
-            <Text style={styles.title}>Notifications</Text>
           </View>
         }
         ListEmptyComponent={!loading ? <Text style={styles.muted}>No notifications yet.</Text> : null}
@@ -158,7 +158,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 18, paddingBottom: 60 },
-  headerRow: { flexDirection: "row", alignItems: "baseline", gap: 12, marginBottom: 16 },
+  headerRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 },
   title: { fontSize: 28, fontWeight: "800", color: colors.text },
   clearAll: { fontSize: 13, fontWeight: "700", color: colors.red },
   card: {

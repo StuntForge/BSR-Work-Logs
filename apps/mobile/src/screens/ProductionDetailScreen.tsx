@@ -53,6 +53,7 @@ interface RecordDetail {
   evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
   fullMember: { id: string; name: string } | null;
   latestDecision: { decision: string; message: string | null } | null;
+  eligibleFromDate: string;
 }
 
 export default function ProductionDetailScreen() {
@@ -153,7 +154,16 @@ export default function ProductionDetailScreen() {
   const isOwnerOngoing = record.status === "ONGOING";
   const isRejected = record.status === "REJECTED";
 
+  // Earliest date the calendar allows tapping — one day after eligibleFromDate, since that
+  // boundary itself is exclusive (matches isDateEligibleForPeriod on the server).
+  const minEligibleDate = (() => {
+    const d = new Date(record.eligibleFromDate);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+
   function toggleDate(dateStr: string) {
+    if (dateStr < minEligibleDate) return;
     const existing = localDates.find((d) => d.date.slice(0, 10) === dateStr);
     if (existing) {
       setLocalDates((prev) => prev.filter((d) => d.id !== existing.id));
@@ -426,9 +436,12 @@ export default function ProductionDetailScreen() {
           <Calendar
             markedDates={markedDates}
             onDayPress={(day) => isOwnerOngoing && toggleDate(day.dateString)}
+            minDate={minEligibleDate}
+            disableAllTouchEventsForDisabledDays
             theme={{ selectedDayBackgroundColor: colors.green, todayTextColor: colors.green, arrowColor: colors.green }}
           />
           {!isOwnerOngoing && <Text style={styles.muted}>Tap dates are disabled — this record is locked.</Text>}
+          {isOwnerOngoing && <Text style={styles.muted}>Dates before {minEligibleDate} are outside your current grade period and can't be claimed.</Text>}
         </Card>
 
         <Card style={{ marginTop: 12 }}>

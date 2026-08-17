@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { isDateEligibleForPeriod } from "@bsr/shared";
+import { effectiveGradeStart } from "@/lib/eligibility";
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
 const schema = z.object({ dates: z.array(z.string().min(1)).min(1) });
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
 
     const record = await prisma.workRecord.findUnique({
       where: { id: params.id },
-      include: { gradeHistory: true, performer: { select: { lastUpgradedAt: true } } },
+      include: { gradeHistory: true, performer: { select: { lastUpgradedAt: true, dateJoined: true } } },
     });
     if (!record) return notFound();
     if (record.performerId !== session.id) return forbidden();
@@ -29,11 +30,11 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const parsedDates = body.data.dates.map((d) => new Date(d));
     if (parsedDates.some((d) => isNaN(d.getTime()))) return badRequest("Invalid date.");
 
-    // Server-side cutoff enforcement, not only UI (spec §6, §29). lastUpgradedAt is the
-    // committee-editable override (see lib/progress.ts) — same effective boundary as everywhere
-    // else, so a corrected historical join/upgrade date also unlocks earlier dates here.
-    const effectiveStart = record.performer.lastUpgradedAt ?? record.gradeHistory.startedAt;
-    const ineligible = parsedDates.filter((d) => !isDateEligibleForPeriod(d, effectiveStart));
+    // Server-side cutoff enforcement, not only UI (spec §6, §29) — same effective boundary as
+    // everywhere else (lib/eligibility.ts), so a corrected historical join/upgrade date also
+    // unlocks earlier dates here.
+    const gradeStart = effectiveGradeStart(record.performer, record.gradeHistory.startedAt);
+    const ineligible = parsedDates.filter((d) => !isDateEligibleForPeriod(d, gradeStart));
     if (ineligible.length > 0) {
       return badRequest("One or more dates fall before your current grade period started and cannot be claimed.");
     }
