@@ -15,6 +15,7 @@ interface WorkRecordSummary {
   identifiables: number;
   fullMember: { id: string; name: string } | null;
   createdAt: string;
+  isQualifyingCoreJob: boolean;
 }
 
 const FILTERS: { key: string; label: string; icon: (c: string) => React.ReactNode; tone: "teal" | "amber" | "green" | "red" }[] = [
@@ -147,8 +148,9 @@ export default function WorkListScreen() {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
               <Text style={styles.productionName}>{item.productionName}</Text>
-              <View style={{ marginTop: 4, alignSelf: "flex-start" }}>
+              <View style={{ marginTop: 4, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                 <Badge label={item.status} tone={STATUS_TONE[item.status] as any} />
+                {item.isQualifyingCoreJob && <Badge label="Core Team" tone="teal" />}
               </View>
               <View style={styles.metaRow}>
                 <IconCalendar size={13} color={colors.textMuted} />

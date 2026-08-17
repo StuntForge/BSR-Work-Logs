@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { nextGradeKey, type GradeKey } from "@bsr/shared";
-import { effectiveGradeStart } from "./eligibility";
+import { effectiveGradeStart, isQualifyingCoreJob } from "./eligibility";
 
 export interface RequirementProgress {
   type: string;
@@ -8,7 +8,11 @@ export interface RequirementProgress {
   approvedValue: number;
   pendingValue: number;
   met: boolean;
+  // Human-readable extra context for requirement types too composite to fit the plain
+  // approvedValue/targetValue ratio (currently just SOLO_OR_CORE_TEAM).
+  detail?: string;
 }
+
 
 export interface ProgressResult {
   currentGrade: { key: string; label: string } | null;
@@ -94,8 +98,34 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
       const qualification = await prisma.qualification.findFirst({ where: { userId, type: "HEALTH_SAFETY" } });
       const level = qualification?.level ?? 0;
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: level, pendingValue: 0, met: level >= def.targetValue });
+    } else if (def.type === "SOLO_OR_CORE_TEAM") {
+      // Senior -> Key composite (explicit BSR policy): met by ANY of —
+      //   10 solo/self-coordinated days, OR
+      //   2 core-team jobs of 12+ consecutive weeks each, OR
+      //   5 solo days + 1 core-team job of 12+ weeks
+      const soloDays = await prisma.workDate.count({
+        where: {
+          status: "CLAIMED",
+          workRecord: { gradeHistoryId: openPeriod.id, performerId: userId, status: "APPROVED", isSoloSubmission: true },
+        },
+      });
+      const coreJobCandidates = await prisma.workRecord.findMany({
+        where: { gradeHistoryId: openPeriod.id, performerId: userId, status: "APPROVED", isCoreJob: true },
+        select: { coreJobStartDate: true, coreJobEndDate: true },
+      });
+      const qualifyingCoreJobs = coreJobCandidates.filter((r) => isQualifyingCoreJob(r.coreJobStartDate, r.coreJobEndDate)).length;
+
+      const met = soloDays >= 10 || qualifyingCoreJobs >= 2 || (soloDays >= 5 && qualifyingCoreJobs >= 1);
+      requirements.push({
+        type: def.type,
+        targetValue: def.targetValue,
+        approvedValue: soloDays,
+        pendingValue: qualifyingCoreJobs,
+        met,
+        detail: `${soloDays} solo day${soloDays === 1 ? "" : "s"} · ${qualifyingCoreJobs} qualifying core-team job${qualifyingCoreJobs === 1 ? "" : "s"} (12+ weeks) — needs 10 solo days, or 2 core-team jobs, or 5 solo days + 1 core-team job`,
+      });
     } else {
-      // SOLO_DAYS / CORE_JOBS / POINTS — architecture placeholder only, no capture mechanics yet (spec §24, §32).
+      // POINTS — architecture placeholder only, no capture mechanics yet (spec §24, §32).
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: 0, pendingValue: 0, met: false });
     }
   }

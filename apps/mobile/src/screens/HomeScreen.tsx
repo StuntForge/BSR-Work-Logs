@@ -14,6 +14,7 @@ interface Requirement {
   approvedValue: number;
   pendingValue: number;
   met: boolean;
+  detail?: string;
 }
 interface HomeData {
   name: string;
@@ -158,6 +159,18 @@ export default function HomeScreen() {
             );
           }
 
+          if (req.type === "SOLO_OR_CORE_TEAM") {
+            return (
+              <Card key={req.type} style={styles.reqCard}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={styles.hsLabel}>Solo / Core Team</Text>
+                  <View style={[styles.hsCheckbox, req.met && styles.hsCheckboxMet]}>{req.met && <IconCheck size={20} color="#fff" />}</View>
+                </View>
+                {req.detail && <Text style={styles.soloDetail}>{req.detail}</Text>}
+              </Card>
+            );
+          }
+
           const percent = req.targetValue > 0 ? Math.min(100, (req.approvedValue / req.targetValue) * 100) : 0;
           const remaining = Math.max(0, req.targetValue - req.approvedValue);
 
@@ -250,4 +263,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   hsCheckboxMet: { backgroundColor: colors.green, borderColor: colors.green },
+  soloDetail: { fontSize: 12, color: colors.textMuted, marginTop: 10, lineHeight: 17 },
 });

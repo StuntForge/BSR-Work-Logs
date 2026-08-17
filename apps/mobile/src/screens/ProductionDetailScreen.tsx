@@ -6,6 +6,7 @@ import { Calendar } from "react-native-calendars";
 import * as DocumentPicker from "expo-document-picker";
 import { apiFetch, API_URL } from "../api/client";
 import { getToken } from "../api/storage";
+import { useAuth } from "../auth/AuthContext";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
 import { KeyboardAvoider } from "../components/KeyboardAvoider";
@@ -55,6 +56,11 @@ interface RecordDetail {
   latestDecision: { decision: string; message: string | null } | null;
   eligibleFromDate: string;
   previousDates: string[];
+  isCoreJob: boolean;
+  coreJobStartDate: string | null;
+  coreJobEndDate: string | null;
+  isQualifyingCoreJob: boolean;
+  isSoloSubmission: boolean;
 }
 
 // Custom day cell so previously-used dates (from an earlier record in the same continuation
@@ -94,6 +100,7 @@ export default function ProductionDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const id: string = route.params.id;
+  const { user } = useAuth();
 
   const [record, setRecord] = useState<RecordDetail | null>(null);
   const [categories, setCategories] = useState<AreaCategory[]>([]);
@@ -113,7 +120,20 @@ export default function ProductionDetailScreen() {
   const [fmResults, setFmResults] = useState<{ id: string; name: string }[]>([]);
   const [selectedFm, setSelectedFm] = useState<{ id: string; name: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submittingSolo, setSubmittingSolo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Core Team job — checkbox + date range are local-only edits like everything else, saved on
+  // back-press. "Amend Calendar" fills weekday dates between start/end into localDates.
+  const [isCoreJob, setIsCoreJob] = useState(false);
+  const [coreJobStartDate, setCoreJobStartDate] = useState<string | null>(null);
+  const [coreJobEndDate, setCoreJobEndDate] = useState<string | null>(null);
+  const [amendMessage, setAmendMessage] = useState<string | null>(null);
+  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end" | null>(null);
+
+  // Solo/Self-Coordinated is purely a UI toggle for which submit flow to use — not persisted
+  // until the dedicated submit-solo endpoint is called.
+  const [isSoloSubmission, setIsSoloSubmission] = useState(false);
 
   // Calendar taps, identifiables, and evidence picks all only touch local state — nothing is
   // sent to the server until the performer navigates back, which saves everything together
@@ -142,6 +162,11 @@ export default function ProductionDetailScreen() {
       }))
     );
     setLocalEvidence(data.record.evidenceDocuments.map((d) => ({ id: d.id, fileName: d.fileName })));
+    setIsCoreJob(!!data.record.isCoreJob);
+    setCoreJobStartDate(data.record.coreJobStartDate ? data.record.coreJobStartDate.slice(0, 10) : null);
+    setCoreJobEndDate(data.record.coreJobEndDate ? data.record.coreJobEndDate.slice(0, 10) : null);
+    setAmendMessage(null);
+    setIsSoloSubmission(false);
     setLoading(false);
   }, [id]);
 
@@ -212,6 +237,24 @@ export default function ProductionDetailScreen() {
     setLocations((prev) => (prev.includes(loc) ? prev.filter((l) => l !== loc) : [...prev, loc]));
   }
 
+  function amendCalendarWithCoreJobDates() {
+    if (!coreJobStartDate || !coreJobEndDate) return;
+    const existingSet = new Set(localDates.map((d) => d.date.slice(0, 10)));
+    const additions: WorkDate[] = [];
+    const cursor = new Date(coreJobStartDate + "T00:00:00.000Z");
+    const end = new Date(coreJobEndDate + "T00:00:00.000Z");
+    while (cursor.getTime() <= end.getTime()) {
+      const dow = cursor.getUTCDay();
+      const dateStr = cursor.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && dateStr >= minEligibleDate && !previousDatesSet.has(dateStr) && !existingSet.has(dateStr)) {
+        additions.push({ id: `pending-${dateStr}`, date: dateStr, status: "CLAIMED" });
+      }
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    setLocalDates((prev) => [...prev, ...additions]);
+    setAmendMessage("All week days added — please go through and add or remove any dates not applicable.");
+  }
+
   async function uploadOneFile(asset: { uri: string; name: string; mimeType: string }, token: string | null) {
     const formData = new FormData();
     formData.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType } as any);
@@ -245,7 +288,10 @@ export default function ProductionDetailScreen() {
     const token = await getToken();
 
     await Promise.all([
-      apiFetch(`/api/work-records/${id}`, { method: "PATCH", body: JSON.stringify({ jobDescription, locations, riskAssessment, comments }) }),
+      apiFetch(`/api/work-records/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ jobDescription, locations, riskAssessment, comments, isCoreJob, coreJobStartDate, coreJobEndDate }),
+      }),
       addedDates.length > 0 ? apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: addedDates }) }) : Promise.resolve(),
       ...removedDateIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
       ...addedIdentifiables.map((idf) =>
@@ -410,6 +456,49 @@ export default function ProductionDetailScreen() {
     }
   }
 
+  function confirmSubmitSolo() {
+    if (!record) return;
+    if (localDates.filter((d) => d.status === "CLAIMED").length === 0) {
+      setError("Add at least one work date before submitting.");
+      return;
+    }
+    if (!jobDescription.trim()) {
+      setError("Add a job description before submitting.");
+      return;
+    }
+    if (locations.length === 0) {
+      setError("Select at least one location before submitting.");
+      return;
+    }
+    if (localEvidence.length === 0) {
+      setError("Upload at least one file before submitting.");
+      return;
+    }
+    setError(null);
+    Alert.alert(
+      "Submit Solo/Self Coordinated?",
+      "ALL of the dates listed must have been self-coordinated, and all must be well evidenced by the supporting documents you've uploaded. This is final and will be instantly approved.",
+      [
+        { text: "Go back", style: "cancel" },
+        { text: "Submit", onPress: submitSolo },
+      ]
+    );
+  }
+
+  async function submitSolo() {
+    setSubmittingSolo(true);
+    setError(null);
+    try {
+      await persistChanges();
+      await apiFetch(`/api/work-records/${id}/submit-solo`, { method: "POST" });
+      navigation.navigate("Main", { screen: "Work" });
+      Alert.alert("Approved", "Your Solo/Self-Coordinated work record has been instantly approved.");
+    } catch (err: any) {
+      setError(err.message);
+      setSubmittingSolo(false);
+    }
+  }
+
   async function editRejected() {
     await apiFetch(`/api/work-records/${id}/edit`, { method: "POST" });
     load();
@@ -430,6 +519,7 @@ export default function ProductionDetailScreen() {
     markedDates[dateStr].isPreviouslyUsed = true;
   }
   const approvedDaysDisplay = localDates.filter((d) => d.status === "CLAIMED").length;
+  const canGoSolo = user?.currentGradeKey === "SENIOR_STUNT_PERFORMER" || user?.currentGradeKey === "KEY_STUNT_PERFORMER";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -447,10 +537,13 @@ export default function ProductionDetailScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View style={styles.rowBetween}>
           <Text style={styles.title}>{record.productionName}</Text>
-          <Badge
-            label={record.status}
-            tone={record.status === "APPROVED" ? "green" : record.status === "SUBMITTED" ? "amber" : record.status === "REJECTED" ? "red" : "gray"}
-          />
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {record.isQualifyingCoreJob && <Badge label="Core Team" tone="teal" />}
+            <Badge
+              label={record.status}
+              tone={record.status === "APPROVED" ? "green" : record.status === "SUBMITTED" ? "amber" : record.status === "REJECTED" ? "red" : "gray"}
+            />
+          </View>
         </View>
 
         {isRejected && (
@@ -488,6 +581,36 @@ export default function ProductionDetailScreen() {
           {isOwnerOngoing && <Text style={styles.muted}>Dates before {minEligibleDate} are outside your current grade period and can't be claimed.</Text>}
           {record.previousDates.length > 0 && (
             <Text style={styles.muted}>Greyed-out dates with a line through them were already claimed on an earlier production in this chain.</Text>
+          )}
+
+          {isOwnerOngoing && (
+            <View style={{ marginTop: 14 }}>
+              <View style={[styles.row, { justifyContent: "space-between" }]}>
+                <Text style={styles.label}>Was this a Core job?</Text>
+                <Switch value={isCoreJob} onValueChange={setIsCoreJob} />
+              </View>
+              {isCoreJob && (
+                <>
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                    <TouchableOpacity style={[styles.input, { flex: 1 }]} onPress={() => setDatePickerTarget("start")}>
+                      <Text style={{ color: coreJobStartDate ? colors.text : colors.textMuted }}>{coreJobStartDate ?? "Start date"}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.input, { flex: 1 }]} onPress={() => setDatePickerTarget("end")}>
+                      <Text style={{ color: coreJobEndDate ? colors.text : colors.textMuted }}>{coreJobEndDate ?? "End date"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ marginTop: 10 }}>
+                    <Button
+                      title="Amend Calendar"
+                      variant="secondary"
+                      onPress={amendCalendarWithCoreJobDates}
+                      disabled={!coreJobStartDate || !coreJobEndDate}
+                    />
+                  </View>
+                  {amendMessage && <Text style={styles.muted}>{amendMessage}</Text>}
+                </>
+              )}
+            </View>
           )}
         </Card>
 
@@ -577,38 +700,57 @@ export default function ProductionDetailScreen() {
         {isOwnerOngoing && (
           <Card style={{ marginTop: 12, borderWidth: 2, borderColor: SUBMIT_BORDER }}>
             <Text style={styles.sectionLabel}>Submit for approval</Text>
-            <Text style={styles.muted}>{SUBMIT_FOR_APPROVAL_HELP_TEXT}</Text>
 
-            <Field label="Full Member">
-              {selectedFm ? (
-                <View style={styles.rowBetween}>
-                  <Text>{selectedFm.name}</Text>
-                  <TouchableOpacity onPress={() => setSelectedFm(null)}>
-                    <Text style={{ color: colors.red }}>Change</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <TextInput style={styles.input} placeholder="Search Full Members..." value={fmQuery} onChangeText={setFmQuery} />
-                  {fmResults.map((fm) => (
-                    <TouchableOpacity
-                      key={fm.id}
-                      style={styles.pickerItem}
-                      onPress={() => {
-                        setSelectedFm(fm);
-                        setFmQuery("");
-                        setFmResults([]);
-                      }}
-                    >
-                      <Text>{fm.name}</Text>
+            {canGoSolo && (
+              <View style={[styles.row, { justifyContent: "space-between", marginBottom: 10 }]}>
+                <Text style={styles.label}>Solo/Self Coordinated?</Text>
+                <Switch value={isSoloSubmission} onValueChange={setIsSoloSubmission} />
+              </View>
+            )}
+
+            <Text style={styles.muted}>
+              {isSoloSubmission
+                ? "Upload all evidence of risk assessments, contracts, recce information and any other supporting documentation for every date listed."
+                : SUBMIT_FOR_APPROVAL_HELP_TEXT}
+            </Text>
+
+            {!isSoloSubmission && (
+              <Field label="Full Member">
+                {selectedFm ? (
+                  <View style={styles.rowBetween}>
+                    <Text>{selectedFm.name}</Text>
+                    <TouchableOpacity onPress={() => setSelectedFm(null)}>
+                      <Text style={{ color: colors.red }}>Change</Text>
                     </TouchableOpacity>
-                  ))}
-                </>
-              )}
-            </Field>
+                  </View>
+                ) : (
+                  <>
+                    <TextInput style={styles.input} placeholder="Search Full Members..." value={fmQuery} onChangeText={setFmQuery} />
+                    {fmResults.map((fm) => (
+                      <TouchableOpacity
+                        key={fm.id}
+                        style={styles.pickerItem}
+                        onPress={() => {
+                          setSelectedFm(fm);
+                          setFmQuery("");
+                          setFmResults([]);
+                        }}
+                      >
+                        <Text>{fm.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
+              </Field>
+            )}
 
             {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
-            <Button title={submitting ? "Submitting..." : "Submit for Approval"} onPress={confirmSubmit} disabled={submitting} loading={submitting} />
+            <Button
+              title={submitting || submittingSolo ? "Submitting..." : isSoloSubmission ? "Submit Solo/Self Coordinated" : "Submit for Approval"}
+              onPress={isSoloSubmission ? confirmSubmitSolo : confirmSubmit}
+              disabled={submitting || submittingSolo}
+              loading={submitting || submittingSolo}
+            />
           </Card>
         )}
 
@@ -628,6 +770,29 @@ export default function ProductionDetailScreen() {
       </KeyboardAvoider>
 
       <AddIdentifiableModal visible={showIdModal} categories={categories} onClose={() => setShowIdModal(false)} onAdd={addIdentifiableLocal} />
+
+      <CoreJobDatePickerModal
+        visible={datePickerTarget !== null}
+        target={datePickerTarget}
+        onClose={() => setDatePickerTarget(null)}
+        onSelect={(dateStr) => {
+          if (datePickerTarget === "start") {
+            if (coreJobEndDate && dateStr >= coreJobEndDate) {
+              Alert.alert("Invalid date", "Start date must be before the end date.");
+              return;
+            }
+            setCoreJobStartDate(dateStr);
+          } else if (datePickerTarget === "end") {
+            if (coreJobStartDate && dateStr <= coreJobStartDate) {
+              Alert.alert("Invalid date", "End date must be after the start date.");
+              return;
+            }
+            setCoreJobEndDate(dateStr);
+          }
+          setAmendMessage(null);
+          setDatePickerTarget(null);
+        }}
+      />
     </View>
   );
 }
@@ -724,6 +889,33 @@ function AddIdentifiableModal({
 
           {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
           <Button title={saving ? "Adding..." : "Add Identifiable"} onPress={submit} disabled={saving} loading={saving} />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function CoreJobDatePickerModal({
+  visible,
+  target,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  target: "start" | "end" | null;
+  onSelect: (dateStr: string) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <Pressable style={[styles.modalBackdrop, { paddingTop: insets.top + 76 }]} onPress={onClose}>
+        <Pressable style={[styles.modalCard, { paddingBottom: 4 }]} onPress={() => {}}>
+          <Text style={styles.modalTitle}>{target === "start" ? "Select start date" : "Select end date"}</Text>
+          <Calendar
+            onDayPress={(day) => onSelect(day.dateString)}
+            theme={{ selectedDayBackgroundColor: colors.green, todayTextColor: colors.green, arrowColor: colors.green }}
+          />
         </Pressable>
       </Pressable>
     </Modal>

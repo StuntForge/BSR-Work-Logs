@@ -60,6 +60,7 @@ enum RequirementType {
   SOLO_DAYS
   CORE_JOBS
   POINTS
+  SOLO_OR_CORE_TEAM
 }
 
 enum WorkApprovalDecision {
@@ -183,6 +184,20 @@ model WorkRecord {
   locations              WorkLocation[]    @default([])
   riskAssessment         Boolean?
   comments               String?
+
+  // A Core Team job of 12+ consecutive weeks (start/end set by the performer, "Amend Calendar"
+  // fills in the weekdays between them) counts toward the Senior -> Key solo/core-team
+  // composite requirement once approved — see lib/eligibility.ts for the 12-week threshold.
+  isCoreJob              Boolean           @default(false)
+  coreJobStartDate       DateTime?
+  coreJobEndDate         DateTime?
+
+  // Solo/Self-Coordinated submissions skip Full Member review entirely and are instantly
+  // approved — the performer is asserting they self-coordinated every date listed, evidenced
+  // by their own uploads. Flagged separately for the committee (spec: needs its own review
+  // section, distinct from the normal Full Member approval queue) and counts toward both the
+  // Solo days requirement and the general Days Worked requirement.
+  isSoloSubmission       Boolean           @default(false)
 
   fullMemberId           String?
   fullMember              User?            @relation("WorkRecordFullMember", fields: [fullMemberId], references: [id])

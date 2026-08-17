@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { isQualifyingCoreJob } from "@/lib/eligibility";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/http";
 
 // GET /api/work-records?tab=ongoing|archive&status=Approved|Submitted|Ongoing|Rejected
@@ -43,6 +44,8 @@ export async function GET(req: NextRequest) {
         identifiables: r.identifiables.length,
         fullMember: r.fullMember,
         createdAt: r.createdAt,
+        isQualifyingCoreJob: isQualifyingCoreJob(r.coreJobStartDate, r.coreJobEndDate),
+        isSoloSubmission: r.isSoloSubmission,
       })),
     });
   } catch (err) {

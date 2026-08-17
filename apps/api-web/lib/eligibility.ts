@@ -12,3 +12,14 @@ export function effectiveGradeStart(
 ): Date {
   return user.lastUpgradedAt ?? user.dateJoined ?? gradeHistoryStartedAt;
 }
+
+// A Core Team job only counts toward the Senior -> Key composite requirement once its date
+// range is 12+ consecutive weeks (explicit BSR policy) — checking the checkbox alone isn't
+// enough, the range has to actually qualify.
+export const CORE_JOB_MIN_WEEKS = 12;
+export const CORE_JOB_MIN_DAYS = CORE_JOB_MIN_WEEKS * 7;
+
+export function isQualifyingCoreJob(startDate: Date | null, endDate: Date | null): boolean {
+  if (!startDate || !endDate) return false;
+  return (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) >= CORE_JOB_MIN_DAYS;
+}

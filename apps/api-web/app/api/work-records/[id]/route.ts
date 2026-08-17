@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { effectiveGradeStart } from "@/lib/eligibility";
+import { effectiveGradeStart, isQualifyingCoreJob } from "@/lib/eligibility";
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
 async function loadRecordWithDetail(id: string) {
@@ -81,6 +81,11 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         locations: record.locations,
         riskAssessment: record.riskAssessment,
         comments: record.comments,
+        isCoreJob: record.isCoreJob,
+        coreJobStartDate: record.coreJobStartDate,
+        coreJobEndDate: record.coreJobEndDate,
+        isQualifyingCoreJob: isQualifyingCoreJob(record.coreJobStartDate, record.coreJobEndDate),
+        isSoloSubmission: record.isSoloSubmission,
         workDates: record.workDates.map((d) => ({ id: d.id, date: d.date, status: d.status })),
         approvedDays: record.workDates.filter((d) => d.status === "CLAIMED").length,
         identifiables: record.identifiables.map((i) => ({
@@ -107,6 +112,9 @@ const patchSchema = z.object({
   locations: z.array(z.enum(["STUDIO", "UK", "OVERSEAS"])).optional(),
   riskAssessment: z.boolean().optional(),
   comments: z.string().optional(),
+  isCoreJob: z.boolean().optional(),
+  coreJobStartDate: z.string().nullable().optional(),
+  coreJobEndDate: z.string().nullable().optional(),
 });
 
 // PATCH /api/work-records/:id — edit ongoing production fields (spec §4.1: Ongoing records are editable)
@@ -127,7 +135,14 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
       return badRequest(`Invalid fields — ${details}`);
     }
 
-    await prisma.workRecord.update({ where: { id: params.id }, data: body.data });
+    const { coreJobStartDate, coreJobEndDate, ...rest } = body.data;
+    const startDate: Date | null | undefined = coreJobStartDate ? new Date(coreJobStartDate) : (coreJobStartDate as null | undefined);
+    const endDate: Date | null | undefined = coreJobEndDate ? new Date(coreJobEndDate) : (coreJobEndDate as null | undefined);
+    if (startDate && endDate && startDate.getTime() >= endDate.getTime()) {
+      return badRequest("Core job start date must be before the end date.");
+    }
+
+    await prisma.workRecord.update({ where: { id: params.id }, data: { ...rest, coreJobStartDate: startDate, coreJobEndDate: endDate } });
     return ok({ success: true });
   } catch (err) {
     return serverError(err);

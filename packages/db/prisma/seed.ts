@@ -22,10 +22,12 @@ const AREA_CATEGORIES = [
 // Explicit BSR policy given directly, per upgrade route. MIN_TIME_AT_GRADE targetValue is in
 // whole days (years * 365). HEALTH_SAFETY targetValue is the required level, set per member by
 // the committee, never self-service. Only the Stunt Performer -> Senior route requires
-// identifiables — the "under at least 3 different coordinators" sub-condition and the Senior ->
-// Key (solo days / core-team jobs) and Key -> Full Member (points) composite requirements are
-// NOT enforced yet: no data capture exists for coordinator identity, solo days, core-team jobs,
-// or points, so those routes are currently missing their 4th requirement pending that build-out.
+// identifiables — the "under at least 3 different coordinators" sub-condition is a manual
+// check the committee makes when reviewing, not enforced by the app (no coordinator-identity
+// data is captured). SOLO_OR_CORE_TEAM (Senior -> Key) is a composite met by 10 solo days, or 2
+// core-team jobs of 12+ weeks, or 5 solo days + 1 core-team job — see lib/progress.ts. Key ->
+// Full Member's points requirement is NOT enforced yet: no data capture exists for it, so that
+// route is still missing its 4th requirement pending that build-out.
 const REQUIREMENTS: Record<string, { type: string; targetValue: number }[]> = {
   STUNT_PERFORMER: [
     { type: "DAYS_WORKED", targetValue: 60 },
@@ -42,6 +44,7 @@ const REQUIREMENTS: Record<string, { type: string; targetValue: number }[]> = {
     { type: "DAYS_WORKED", targetValue: 120 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 730 },
     { type: "HEALTH_SAFETY", targetValue: 3 },
+    { type: "SOLO_OR_CORE_TEAM", targetValue: 10 },
   ],
   FULL_MEMBER: [
     { type: "DAYS_WORKED", targetValue: 160 },

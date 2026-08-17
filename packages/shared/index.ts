@@ -61,14 +61,19 @@ export const REQUIREMENT_TYPES = [
   "MIN_TIME_AT_GRADE",
   "COORDINATOR_SPREAD",
   "HEALTH_SAFETY",
-  "SOLO_DAYS",
-  "CORE_JOBS",
+  "SOLO_OR_CORE_TEAM",
   "POINTS",
 ] as const;
 export type RequirementType = (typeof REQUIREMENT_TYPES)[number];
 
 // Coordinator Spread was tried and explicitly dropped — not a real BSR requirement.
-export const ACTIVE_REQUIREMENT_TYPES: RequirementType[] = ["DAYS_WORKED", "IDENTIFIABLES", "MIN_TIME_AT_GRADE", "HEALTH_SAFETY"];
+export const ACTIVE_REQUIREMENT_TYPES: RequirementType[] = [
+  "DAYS_WORKED",
+  "IDENTIFIABLES",
+  "MIN_TIME_AT_GRADE",
+  "HEALTH_SAFETY",
+  "SOLO_OR_CORE_TEAM",
+];
 
 export const AREA_CATEGORY_KEYS = ["A", "B", "C", "D", "E", "F"] as const;
 export type AreaCategoryKey = (typeof AREA_CATEGORY_KEYS)[number];

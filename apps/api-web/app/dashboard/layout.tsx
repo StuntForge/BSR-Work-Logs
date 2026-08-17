@@ -3,7 +3,7 @@ import { getServerSession } from "@/lib/server-session";
 import { NavLink } from "./NavLink";
 import { LogoutButton } from "./LogoutButton";
 import { Logo } from "./Logo";
-import { IconUsers, IconShield, IconTrendingUp, IconSettings } from "./Icons";
+import { IconUsers, IconShield, IconTrendingUp, IconSettings, IconInbox } from "./Icons";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
@@ -27,6 +27,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </NavLink>
             <NavLink href="/dashboard/pending-upgrades" icon={<IconTrendingUp />}>
               Pending Upgrades
+            </NavLink>
+            <NavLink href="/dashboard/solo-submissions" icon={<IconInbox />}>
+              Solo Submissions
             </NavLink>
           </nav>
         </div>
