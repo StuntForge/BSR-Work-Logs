@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, ImageBackground, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, ImageBackground, TouchableOpacity, StyleSheet, Image, useWindowDimensions } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme";
@@ -7,7 +7,10 @@ import { useAuth } from "../auth/AuthContext";
 import { IconArrowLeft, IconLogout } from "./Icons";
 
 const banner = require("../../assets/app-banner.png");
-const logo = require("../../assets/app-logo.png");
+// app-logo.png has a heavy "distressed" texture baked into its alpha channel — looks fine at
+// large sizes but turns into a gray haze when shrunk to header size, so the header uses a
+// separately thresholded/cropped variant for a crisp result instead.
+const logo = require("../../assets/app-logo-header.png");
 
 const TALL_CONTENT_HEIGHT = 190;
 const SHORT_CONTENT_HEIGHT = 64;
@@ -16,23 +19,30 @@ interface HeaderProps {
   variant?: "main" | "detail";
   title?: string;
   extraHeight?: number;
-  /** detail variant only — an optional icon button on the right, e.g. a save tick. */
+  /** detail variant only — an optional icon button on the right. */
   rightAction?: { icon: React.ReactNode; onPress: () => void };
+  /** detail variant only — overrides the default navigation.goBack(), e.g. to save before leaving. */
+  onBack?: () => void;
 }
 
 // Shared banner header used at the top of every screen. `variant="main"` shows the full logo
 // lockup + sign out (Home/Work/Notifications), anchored near the TOP of the banner; `variant=
 // "detail"` shows a back arrow + title (Production detail, Review, New production). Height
 // always includes the safe-area top inset so content never sits under a notch/status bar.
-export function Header({ variant = "main", title, extraHeight = 0, rightAction }: HeaderProps) {
+export function Header({ variant = "main", title, extraHeight = 0, rightAction, onBack }: HeaderProps) {
   const navigation = useNavigation<any>();
   const { logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   const contentHeight = (variant === "detail" ? SHORT_CONTENT_HEIGHT : TALL_CONTENT_HEIGHT) + extraHeight;
 
   return (
-    <ImageBackground source={banner} style={[styles.banner, { height: contentHeight + insets.top }]} resizeMode="cover">
+    <ImageBackground
+      source={banner}
+      style={[styles.banner, { width: screenWidth, height: contentHeight + insets.top }]}
+      resizeMode="cover"
+    >
       <View style={styles.overlay} />
       {variant === "main" ? (
         <View style={[styles.mainRow, { paddingTop: insets.top + 20 }]}>
@@ -44,7 +54,7 @@ export function Header({ variant = "main", title, extraHeight = 0, rightAction }
         </View>
       ) : (
         <View style={[styles.detailRow, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <TouchableOpacity onPress={onBack ?? (() => navigation.goBack())} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <IconArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={[styles.detailTitle, { flex: 1 }]}>{title}</Text>

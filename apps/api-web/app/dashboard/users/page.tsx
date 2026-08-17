@@ -12,6 +12,12 @@ interface Member {
   active: boolean;
   currentGrade: { key: string; label: string } | null;
   healthSafetyLevel: number;
+  dateJoined: string | null;
+  lastUpgradedAt: string | null;
+}
+
+function toDateInputValue(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : "";
 }
 
 function initials(name: string) {
@@ -63,6 +69,11 @@ export default function UsersPage() {
 
   async function setHealthSafetyLevel(m: Member, level: number) {
     await apiFetch(`/api/committee/members/${m.id}/health-safety`, { method: "PATCH", body: JSON.stringify({ level }) });
+    load();
+  }
+
+  async function setMemberDate(m: Member, field: "dateJoined" | "lastUpgradedAt", value: string) {
+    await apiFetch(`/api/committee/members/${m.id}`, { method: "PATCH", body: JSON.stringify({ [field]: value || null }) });
     load();
   }
 
@@ -146,6 +157,8 @@ export default function UsersPage() {
                 <th>Grade</th>
                 <th>Status</th>
                 <th>H&amp;S Level</th>
+                <th>Date Joined</th>
+                <th>Last Upgraded</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -176,6 +189,24 @@ export default function UsersPage() {
                     </select>
                   </td>
                   <td>
+                    <input
+                      className="input"
+                      type="date"
+                      style={{ width: 150 }}
+                      value={toDateInputValue(m.dateJoined)}
+                      onChange={(e) => setMemberDate(m, "dateJoined", e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      type="date"
+                      style={{ width: 150 }}
+                      value={toDateInputValue(m.lastUpgradedAt)}
+                      onChange={(e) => setMemberDate(m, "lastUpgradedAt", e.target.value)}
+                    />
+                  </td>
+                  <td>
                     <div className="row">
                       <button className="btn" onClick={() => resetPassword(m)}>
                         <IconKey />
@@ -191,7 +222,7 @@ export default function UsersPage() {
               ))}
               {members.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={8} className="muted">
                     No users found.
                   </td>
                 </tr>

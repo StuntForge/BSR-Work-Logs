@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
           areaItemId: source.areaItemId,
           jobDescription: source.jobDescription,
           otherPerformersText: source.otherPerformersText,
-          location: source.location,
+          locations: source.locations,
           riskAssessment: source.riskAssessment,
           comments: source.comments,
         },

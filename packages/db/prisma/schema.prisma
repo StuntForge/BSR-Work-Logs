@@ -90,6 +90,11 @@ model User {
   isCommittee        Boolean   @default(false)
   currentGradeId     String?
   currentGrade       Grade?    @relation(fields: [currentGradeId], references: [id])
+  // Committee-editable, distinct from `createdAt` (account creation) — members can have joined
+  // BSR, or last upgraded, long before this system existed, so these are set directly rather
+  // than derived.
+  dateJoined         DateTime?
+  lastUpgradedAt     DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -175,7 +180,7 @@ model WorkRecord {
   areaItem               AreaItem?         @relation(fields: [areaItemId], references: [id])
   jobDescription         String?
   otherPerformersText    String?
-  location               WorkLocation?
+  locations              WorkLocation[]    @default([])
   riskAssessment         Boolean?
   comments               String?
 

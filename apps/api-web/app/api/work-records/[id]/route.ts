@@ -55,7 +55,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         areaItem: record.areaItem ? { id: record.areaItem.id, label: record.areaItem.label, category: record.areaItem.category.label } : null,
         jobDescription: record.jobDescription,
         otherPerformersText: record.otherPerformersText,
-        location: record.location,
+        locations: record.locations,
         riskAssessment: record.riskAssessment,
         comments: record.comments,
         workDates: record.workDates.map((d) => ({ id: d.id, date: d.date, status: d.status })),
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
 
 const patchSchema = z.object({
   jobDescription: z.string().optional(),
-  location: z.enum(["STUDIO", "UK", "OVERSEAS"]).optional(),
+  locations: z.array(z.enum(["STUDIO", "UK", "OVERSEAS"])).optional(),
   riskAssessment: z.boolean().optional(),
   comments: z.string().optional(),
 });
@@ -99,7 +99,10 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
     if (record.status !== "ONGOING") return forbidden("Only Ongoing records are editable.");
 
     const body = patchSchema.safeParse(await req.json());
-    if (!body.success) return badRequest("Invalid fields.");
+    if (!body.success) {
+      const details = body.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+      return badRequest(`Invalid fields — ${details}`);
+    }
 
     await prisma.workRecord.update({ where: { id: params.id }, data: body.data });
     return ok({ success: true });

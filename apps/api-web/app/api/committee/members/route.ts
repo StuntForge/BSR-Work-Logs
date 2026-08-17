@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
         active: u.active,
         currentGrade: u.currentGrade ? { key: u.currentGrade.key, label: u.currentGrade.label } : null,
         healthSafetyLevel: u.qualifications[0]?.level ?? 0,
+        dateJoined: u.dateJoined,
+        lastUpgradedAt: u.lastUpgradedAt,
       })),
     });
   } catch (err) {

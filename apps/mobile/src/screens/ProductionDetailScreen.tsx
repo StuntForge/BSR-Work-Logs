@@ -9,7 +9,7 @@ import { getToken } from "../api/storage";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
 import { KeyboardAvoider } from "../components/KeyboardAvoider";
-import { IconIdCard, IconChevronDown, IconPlus, IconCheck, IconTrash } from "../components/Icons";
+import { IconIdCard, IconChevronDown, IconPlus, IconTrash } from "../components/Icons";
 import { colors } from "../theme";
 import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION, WORK_LOCATION_LABELS } from "@bsr/shared";
 
@@ -31,7 +31,7 @@ interface RecordDetail {
   status: string;
   hasSpawnedContinuation: boolean;
   jobDescription: string | null;
-  location: string | null;
+  locations: string[];
   riskAssessment: boolean | null;
   comments: string | null;
   workDates: WorkDate[];
@@ -53,11 +53,12 @@ export default function ProductionDetailScreen() {
 
   // Editable field state (only meaningful while status === ONGOING)
   const [jobDescription, setJobDescription] = useState("");
-  const [location, setLocation] = useState<string | null>(null);
+  const [locations, setLocations] = useState<string[]>([]);
   const [riskAssessment, setRiskAssessment] = useState(false);
   const [comments, setComments] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
 
   const [showIdModal, setShowIdModal] = useState(false);
 
@@ -75,7 +76,7 @@ export default function ProductionDetailScreen() {
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
     setRecord(data.record);
     setJobDescription(data.record.jobDescription ?? "");
-    setLocation(data.record.location);
+    setLocations(data.record.locations ?? []);
     setRiskAssessment(!!data.record.riskAssessment);
     setComments(data.record.comments ?? "");
     setLocalDates(data.record.workDates);
@@ -126,26 +127,45 @@ export default function ProductionDetailScreen() {
     }
   }
 
-  async function saveAll() {
+  function toggleLocation(loc: string) {
+    setLocations((prev) => (prev.includes(loc) ? prev.filter((l) => l !== loc) : [...prev, loc]));
+  }
+
+  // Sends whatever is currently in local state to the server. Does NOT refresh local state
+  // afterwards — safe to fire-and-forget when navigating away (e.g. on back-press).
+  async function persistChanges() {
     if (!record) return;
+    const localIds = new Set(localDates.map((d) => d.id));
+    const removedIds = record.workDates.filter((d) => !localIds.has(d.id)).map((d) => d.id);
+    const addedDates = localDates.filter((d) => d.id.startsWith("pending-")).map((d) => d.date);
+
+    await Promise.all([
+      apiFetch(`/api/work-records/${id}`, { method: "PATCH", body: JSON.stringify({ jobDescription, locations, riskAssessment, comments }) }),
+      addedDates.length > 0 ? apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: addedDates }) }) : Promise.resolve(),
+      ...removedIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
+    ]);
+  }
+
+  // Used when the performer stays on screen (e.g. "Save Edits" in the submit confirmation) —
+  // saves, then reloads so the screen reflects the confirmed server state.
+  async function saveAll() {
     setSaving(true);
     setError(null);
     try {
-      const localIds = new Set(localDates.map((d) => d.id));
-      const removedIds = record.workDates.filter((d) => !localIds.has(d.id)).map((d) => d.id);
-      const addedDates = localDates.filter((d) => d.id.startsWith("pending-")).map((d) => d.date);
-
-      await Promise.all([
-        apiFetch(`/api/work-records/${id}`, { method: "PATCH", body: JSON.stringify({ jobDescription, location, riskAssessment, comments }) }),
-        addedDates.length > 0 ? apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: addedDates }) }) : Promise.resolve(),
-        ...removedIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
-      ]);
+      await persistChanges();
       await load();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleBack() {
+    if (isOwnerOngoing) {
+      persistChanges().catch(() => {});
+    }
+    navigation.goBack();
   }
 
   function confirmDelete() {
@@ -186,23 +206,35 @@ export default function ProductionDetailScreen() {
   }
 
   async function uploadEvidence() {
-    const result = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/jpeg", "image/png"] });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    const blob = await (await fetch(asset.uri)).blob();
-    const formData = new FormData();
-    formData.append("file", blob, asset.name);
-    const token = await getToken();
-    const res = await fetch(`${API_URL}/api/work-records/${id}/evidence`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: formData,
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/jpeg", "image/png"],
+      multiple: true,
     });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      setError(d.error || "Upload failed.");
-      return;
+    if (result.canceled || !result.assets?.length) return;
+    setUploadingEvidence(true);
+    setError(null);
+    const token = await getToken();
+    const failures: string[] = [];
+    for (const asset of result.assets) {
+      try {
+        const blob = await (await fetch(asset.uri)).blob();
+        const formData = new FormData();
+        formData.append("file", blob, asset.name);
+        const res = await fetch(`${API_URL}/api/work-records/${id}/evidence`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: formData,
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          failures.push(`${asset.name}: ${d.error || "Upload failed."}`);
+        }
+      } catch {
+        failures.push(`${asset.name}: Upload failed.`);
+      }
     }
+    setUploadingEvidence(false);
+    if (failures.length > 0) setError(failures.join("\n"));
     load();
   }
 
@@ -211,14 +243,27 @@ export default function ProductionDetailScreen() {
     load();
   }
 
-  async function submitForApproval() {
+  function confirmSubmit() {
     if (!selectedFm) {
       setError("Select a Full Member to submit to.");
       return;
     }
+    Alert.alert(
+      "Submit for approval?",
+      "This is final — only submit once all work on this production is finished, or if you need the days accumulated so far counted toward an upgrade. Your Full Member will need to reject it back to you before you can make any further changes.",
+      [
+        { text: "Save Edits (don't submit)", style: "cancel", onPress: () => saveAll() },
+        { text: "Finalise & Submit", onPress: submitForApproval },
+      ]
+    );
+  }
+
+  async function submitForApproval() {
+    if (!selectedFm) return;
     setSubmitting(true);
     setError(null);
     try {
+      await persistChanges();
       await apiFetch(`/api/work-records/${id}/submit`, { method: "POST", body: JSON.stringify({ fullMemberId: selectedFm.id }) });
       load();
     } catch (err: any) {
@@ -247,20 +292,7 @@ export default function ProductionDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header
-        variant="detail"
-        title="Production"
-        rightAction={
-          isOwnerOngoing
-            ? {
-                icon: saving ? <ActivityIndicator size="small" color="#fff" /> : <IconCheck size={22} color="#fff" />,
-                onPress: () => {
-                  if (!saving) saveAll();
-                },
-              }
-            : undefined
-        }
-      />
+      <Header variant="detail" title="Production" onBack={handleBack} />
       <KeyboardAvoider>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View style={styles.rowBetween}>
@@ -304,15 +336,15 @@ export default function ProductionDetailScreen() {
             <TextInput style={[styles.input, { minHeight: 60 }]} multiline value={jobDescription} onChangeText={setJobDescription} editable={isOwnerOngoing} />
           </Field>
 
-          <Field label="Location">
+          <Field label="Location (select all that apply)">
             <View style={styles.rowWrap}>
               {WORK_LOCATION.map((loc) => (
                 <TouchableOpacity
                   key={loc}
-                  style={[styles.chip, location === loc && styles.chipActive]}
-                  onPress={() => isOwnerOngoing && setLocation(loc)}
+                  style={[styles.chip, locations.includes(loc) && styles.chipActive]}
+                  onPress={() => isOwnerOngoing && toggleLocation(loc)}
                 >
-                  <Text style={[styles.chipText, location === loc && styles.chipTextActive]}>{WORK_LOCATION_LABELS[loc]}</Text>
+                  <Text style={[styles.chipText, locations.includes(loc) && styles.chipTextActive]}>{WORK_LOCATION_LABELS[loc]}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -372,7 +404,13 @@ export default function ProductionDetailScreen() {
           {record.evidenceDocuments.length === 0 && <Text style={styles.muted}>No files uploaded yet.</Text>}
           {isOwnerOngoing && (
             <View style={{ marginTop: 10 }}>
-              <Button title="Upload Contract" variant="secondary" onPress={uploadEvidence} />
+              <Button
+                title={uploadingEvidence ? "Uploading..." : "Upload Files"}
+                variant="secondary"
+                onPress={uploadEvidence}
+                disabled={uploadingEvidence}
+                loading={uploadingEvidence}
+              />
             </View>
           )}
         </Card>
@@ -411,7 +449,7 @@ export default function ProductionDetailScreen() {
             </Field>
 
             {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
-            <Button title={submitting ? "Submitting..." : "Submit for Approval"} onPress={submitForApproval} disabled={submitting} loading={submitting} />
+            <Button title={submitting ? "Submitting..." : "Submit for Approval"} onPress={confirmSubmit} disabled={submitting} loading={submitting} />
           </Card>
         )}
 
