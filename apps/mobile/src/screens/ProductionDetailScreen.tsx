@@ -241,9 +241,11 @@ export default function ProductionDetailScreen() {
     const failures: string[] = [];
     for (const asset of result.assets) {
       try {
-        const blob = await (await fetch(asset.uri)).blob();
         const formData = new FormData();
-        formData.append("file", blob, asset.name);
+        // RN's fetch/FormData accepts a {uri,name,type} descriptor and streams the file
+        // natively — fetch(uri).blob() is the web pattern and is unreliable here, especially
+        // for content:// URIs Android's document picker often returns.
+        formData.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType || "application/octet-stream" } as any);
         const res = await fetch(`${API_URL}/api/work-records/${id}/evidence`, {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -253,8 +255,8 @@ export default function ProductionDetailScreen() {
           const d = await res.json().catch(() => ({}));
           failures.push(`${asset.name}: ${d.error || "Upload failed."}`);
         }
-      } catch {
-        failures.push(`${asset.name}: Upload failed.`);
+      } catch (err: any) {
+        failures.push(`${asset.name}: ${err?.message || "Upload failed."}`);
       }
     }
     setUploadingEvidence(false);
