@@ -59,7 +59,10 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
             createdByUpgradeApplicationId: application.id,
           },
         });
-        await tx.user.update({ where: { id: application.userId }, data: { currentGradeId: application.toGradeId } });
+        // Keep lastUpgradedAt in sync automatically for upgrades that go through the app — it
+        // only needs manual committee correction for historical members who upgraded before
+        // this system existed (spec §32 territory, see the User model comment).
+        await tx.user.update({ where: { id: application.userId }, data: { currentGradeId: application.toGradeId, lastUpgradedAt: decidedAt } });
 
         // 5. Move approved productions from that upgrade period into Archive.
         await tx.workRecord.updateMany({

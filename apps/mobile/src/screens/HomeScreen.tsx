@@ -2,10 +2,10 @@ import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
-import { Card, Button, ProgressBar, Badge } from "../components/UI";
+import { Card, Button, ProgressBar } from "../components/UI";
 import { Header } from "../components/Header";
 import { ProgressRing } from "../components/ProgressRing";
-import { IconAward, IconCalendar, IconIdCard, IconShieldCheck } from "../components/Icons";
+import { IconAward, IconCalendar, IconIdCard, IconCheck } from "../components/Icons";
 import { colors } from "../theme";
 
 interface Requirement {
@@ -150,18 +150,9 @@ export default function HomeScreen() {
           if (req.type === "HEALTH_SAFETY") {
             return (
               <Card key={req.type} style={styles.reqCard}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                  <View style={[styles.hsIcon, { backgroundColor: colors.purpleLight }]}>
-                    <IconShieldCheck size={22} color={colors.purple} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.reqLabel, { color: colors.purple }]}>{meta.label.toUpperCase()}</Text>
-                    <Text style={styles.hsStatus}>
-                      Level {req.approvedValue} of {req.targetValue} required
-                    </Text>
-                    <Text style={styles.hsDesc}>Set by the BSR committee — contact them to update your level.</Text>
-                  </View>
-                  <Badge label={req.met ? "Met" : "Not met"} tone={req.met ? "green" : "amber"} />
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={styles.hsLabel}>Health and Safety Level: {req.approvedValue}</Text>
+                  <View style={[styles.hsCheckbox, req.met && styles.hsCheckboxMet]}>{req.met && <IconCheck size={20} color="#fff" />}</View>
                 </View>
               </Card>
             );
@@ -248,7 +239,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   footerPillText: { fontSize: 11, color: colors.textMuted, fontWeight: "600" },
-  hsIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  hsStatus: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: 2 },
-  hsDesc: { fontSize: 11, color: colors.textMuted, marginTop: 3 },
+  hsLabel: { fontSize: 15, fontWeight: "800", color: colors.text },
+  hsCheckbox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hsCheckboxMet: { backgroundColor: colors.green, borderColor: colors.green },
 });

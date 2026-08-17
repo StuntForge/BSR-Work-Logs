@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { Calendar } from "react-native-calendars";
@@ -48,6 +48,7 @@ export default function ReviewScreen() {
   // Local, optimistic copy of workDates so rejecting a date updates the calendar instantly
   // instead of waiting on the server round trip.
   const [localDates, setLocalDates] = useState<RecordDetail["workDates"]>([]);
+  const scrollRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
@@ -115,7 +116,7 @@ export default function ReviewScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header variant="detail" title="Review" />
       <KeyboardAvoider>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>{record.performer.name}</Text>
         <Text style={styles.subtitle}>{record.productionName}</Text>
 
@@ -205,6 +206,7 @@ export default function ReviewScreen() {
               placeholder="Message (optional on approve, required on reject)"
               value={message}
               onChangeText={setMessage}
+              onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)}
             />
             {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
             <View style={styles.row}>

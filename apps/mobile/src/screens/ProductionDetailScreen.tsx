@@ -250,7 +250,7 @@ export default function ProductionDetailScreen() {
     }
     Alert.alert(
       "Submit for approval?",
-      "This is final — only submit once all work on this production is finished, or if you need the days accumulated so far counted toward an upgrade. Your Full Member will need to reject it back to you before you can make any further changes.",
+      "This is final. Only submit once all work on this production is finished, or if you need the days accumulated so far counted toward an upgrade.",
       [
         { text: "Save Edits (don't submit)", style: "cancel", onPress: () => saveAll() },
         { text: "Finalise & Submit", onPress: submitForApproval },

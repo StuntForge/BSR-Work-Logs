@@ -51,6 +51,12 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
     orderBy: { type: "asc" },
   });
 
+  // lastUpgradedAt is a committee-editable override for members who upgraded before this system
+  // existed (their GradeHistory.startedAt would otherwise just be whenever their account was
+  // created here, not their real history) — falls back to the tracked grade period start for
+  // everyone else, and for upgrades that go through the app the two are kept in sync automatically.
+  const effectiveGradeStart = user.lastUpgradedAt ?? openPeriod.startedAt;
+
   const requirements: RequirementProgress[] = [];
 
   for (const def of defs) {
@@ -83,7 +89,7 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
       });
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue, pendingValue, met: approvedValue >= def.targetValue });
     } else if (def.type === "MIN_TIME_AT_GRADE") {
-      const daysServed = Math.floor((Date.now() - openPeriod.startedAt.getTime()) / (1000 * 60 * 60 * 24));
+      const daysServed = Math.floor((Date.now() - effectiveGradeStart.getTime()) / (1000 * 60 * 60 * 24));
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: daysServed, pendingValue: 0, met: daysServed >= def.targetValue });
     } else if (def.type === "HEALTH_SAFETY") {
       // Level is set by the committee, not the member (spec §25 workflow TBD; explicit policy:
@@ -100,7 +106,7 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
   return {
     currentGrade: { key: user.currentGrade.key, label: user.currentGrade.label },
     nextGrade: { key: nextGrade.key, label: nextGrade.label },
-    gradePeriodStartedAt: openPeriod.startedAt.toISOString(),
+    gradePeriodStartedAt: effectiveGradeStart.toISOString(),
     requirements,
     eligibleForUpgrade: requirements.length > 0 && requirements.every((r) => r.met),
   };
