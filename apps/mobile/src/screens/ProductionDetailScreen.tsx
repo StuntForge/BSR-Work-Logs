@@ -244,10 +244,28 @@ export default function ProductionDetailScreen() {
   }
 
   function confirmSubmit() {
+    if (!record) return;
     if (!selectedFm) {
       setError("Select a Full Member to submit to.");
       return;
     }
+    if (localDates.filter((d) => d.status === "CLAIMED").length === 0) {
+      setError("Add at least one work date before submitting.");
+      return;
+    }
+    if (!jobDescription.trim()) {
+      setError("Add a job description before submitting.");
+      return;
+    }
+    if (locations.length === 0) {
+      setError("Select at least one location before submitting.");
+      return;
+    }
+    if (record.evidenceDocuments.length === 0) {
+      setError("Upload at least one file before submitting.");
+      return;
+    }
+    setError(null);
     Alert.alert(
       "Submit for approval?",
       "This is final. Only submit once all work on this production is finished, or if you need the days accumulated so far counted toward an upgrade.",
@@ -313,10 +331,15 @@ export default function ProductionDetailScreen() {
           </Card>
         )}
 
-        {record.status === "APPROVED" && !record.hasSpawnedContinuation && (
-          <View style={{ marginTop: 12 }}>
-            <Button title="Add Additional Work" variant="secondary" onPress={addContinuation} />
-          </View>
+        {(record.status === "APPROVED" || record.status === "ARCHIVED") && !record.hasSpawnedContinuation && (
+          <Card style={{ marginTop: 12, borderWidth: 2, borderColor: SUBMIT_BORDER }}>
+            <Text style={styles.muted}>
+              Worked additional days on this production after it was already approved? Use this to carry on logging them.
+            </Text>
+            <View style={{ marginTop: 10 }}>
+              <Button title="Duplicate Production" onPress={addContinuation} />
+            </View>
+          </Card>
         )}
 
         <Card style={{ marginTop: 12 }}>

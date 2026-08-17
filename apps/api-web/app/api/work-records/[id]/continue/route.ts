@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const source = await prisma.workRecord.findUnique({ where: { id: params.id } });
     if (!source) return notFound();
     if (source.performerId !== session.id) return forbidden();
-    if (source.status !== "APPROVED") return forbidden("Only an Approved record can start a continuation.");
+    if (source.status !== "APPROVED" && source.status !== "ARCHIVED") return forbidden("Only an Approved or Archived record can start a continuation.");
     if (source.hasSpawnedContinuation) return forbidden("A continuation has already been started from this record.");
 
     const openPeriod = await prisma.gradeHistory.findFirst({

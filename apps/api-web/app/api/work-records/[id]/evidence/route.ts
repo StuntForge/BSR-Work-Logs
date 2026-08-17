@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { validateEvidenceFile, uploadEvidence } from "@/lib/blob";
-import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
+import { ok, badRequest, unauthorized, forbidden, notFound } from "@/lib/http";
 
 // POST /api/work-records/:id/evidence — contract/evidence upload is part of the normal
 // workflow, not deferred to the final upgrade application (spec §9).
@@ -37,7 +37,8 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     });
 
     return ok({ id: doc.id, fileUrl: doc.fileUrl, fileName: doc.fileName }, 201);
-  } catch (err) {
-    return serverError(err);
+  } catch (err: any) {
+    console.error("Evidence upload failed:", err);
+    return badRequest(`Upload failed: ${err?.message || "unknown error"}`);
   }
 }

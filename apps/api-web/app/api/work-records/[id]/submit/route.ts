@@ -22,6 +22,13 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const body = schema.safeParse(await req.json());
     if (!body.success) return badRequest("Select a Full Member to submit to.");
 
+    const claimedDays = await prisma.workDate.count({ where: { workRecordId: record.id, status: "CLAIMED" } });
+    if (claimedDays === 0) return badRequest("Add at least one work date before submitting.");
+    if (!record.jobDescription?.trim()) return badRequest("Add a job description before submitting.");
+    if (!record.locations || record.locations.length === 0) return badRequest("Select at least one location before submitting.");
+    const evidenceCount = await prisma.evidenceDocument.count({ where: { workRecordId: record.id } });
+    if (evidenceCount === 0) return badRequest("Upload at least one file before submitting.");
+
     const fullMember = await prisma.user.findUnique({
       where: { id: body.data.fullMemberId },
       include: { currentGrade: true },
