@@ -32,23 +32,16 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
       return badRequest("A reason is required when rejecting.");
     }
 
-    await prisma.$transaction(async (tx) => {
-      if (body.data.decision === "APPROVED") {
-        // Any identifiable the FM didn't explicitly reject is treated as accepted at the
-        // moment of overall approval (spec doesn't define this default explicitly; documented
-        // here as the narrow interpretation — see plan).
-        await tx.identifiable.updateMany({
-          where: { workRecordId: record.id, status: "SUBMITTED" },
-          data: { status: "APPROVED", reviewedAt: new Date() },
-        });
-        const stillUnverified = await tx.identifiable.findMany({
-          where: { workRecordId: record.id, status: "APPROVED", verifiedDescription: null },
-        });
-        for (const i of stillUnverified) {
-          await tx.identifiable.update({ where: { id: i.id }, data: { verifiedDescription: i.performerDescription } });
-        }
+    if (body.data.decision === "APPROVED") {
+      // Every identifiable must be explicitly decided first — no implicit accept-on-approve
+      // default anymore (explicit BSR policy: the FM must respond to each one).
+      const unresolvedCount = await prisma.identifiable.count({ where: { workRecordId: record.id, status: "SUBMITTED" } });
+      if (unresolvedCount > 0) {
+        return badRequest("Respond to every identifiable before approving this work record.");
       }
+    }
 
+    await prisma.$transaction(async (tx) => {
       await tx.workRecord.update({
         where: { id: record.id },
         data: { status: body.data.decision, decidedAt: new Date() },

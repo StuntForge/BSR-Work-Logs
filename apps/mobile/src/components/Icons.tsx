@@ -256,6 +256,20 @@ export function IconEyeOff({ size, color = "#000", strokeWidth = 1.8 }: IconProp
   );
 }
 
+export function IconPencil({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg {...base(size, color)}>
+      <Path
+        d="M14.5 4.5l5 5L8 21H3v-5L14.5 4.5Z"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Line x1="12.5" y1="6.5" x2="17.5" y2="11.5" strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export function IconTrash({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg {...base(size, color)}>

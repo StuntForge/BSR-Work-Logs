@@ -47,6 +47,21 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
     // client disable/block those dates directly instead of only rejecting them after a tap.
     const eligibleFromDate = effectiveGradeStart(record.performer, record.gradeHistory.startedAt);
 
+    // Dates already claimed on an earlier record in this same continuation chain — a
+    // "Duplicate Production" shouldn't let the performer re-claim the same day twice.
+    const previousDates =
+      record.continuationSequence > 0
+        ? (
+            await prisma.workDate.findMany({
+              where: {
+                status: "CLAIMED",
+                workRecord: { productionFamilyId: record.productionFamilyId, continuationSequence: { lt: record.continuationSequence } },
+              },
+              select: { date: true },
+            })
+          ).map((d) => d.date.toISOString().slice(0, 10))
+        : [];
+
     return ok({
       record: {
         id: record.id,
@@ -58,6 +73,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         performer: { id: record.performer.id, name: record.performer.name },
         fullMember: record.fullMember,
         eligibleFromDate: eligibleFromDate.toISOString(),
+        previousDates,
         natureOfEmployment: record.natureOfEmployment,
         areaItem: record.areaItem ? { id: record.areaItem.id, label: record.areaItem.label, category: record.areaItem.category.label } : null,
         jobDescription: record.jobDescription,

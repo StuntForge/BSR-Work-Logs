@@ -39,6 +39,20 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
       return badRequest("One or more dates fall before your current grade period started and cannot be claimed.");
     }
 
+    if (record.continuationSequence > 0) {
+      const usedElsewhere = await prisma.workDate.findMany({
+        where: {
+          status: "CLAIMED",
+          date: { in: parsedDates },
+          workRecord: { productionFamilyId: record.productionFamilyId, continuationSequence: { lt: record.continuationSequence } },
+        },
+        select: { date: true },
+      });
+      if (usedElsewhere.length > 0) {
+        return badRequest("One or more dates were already claimed on an earlier production in this chain.");
+      }
+    }
+
     await prisma.workDate.createMany({
       data: parsedDates.map((date) => ({ workRecordId: record.id, date, status: "CLAIMED" as const })),
       skipDuplicates: true,

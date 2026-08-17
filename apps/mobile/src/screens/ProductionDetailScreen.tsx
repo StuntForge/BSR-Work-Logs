@@ -54,7 +54,41 @@ interface RecordDetail {
   fullMember: { id: string; name: string } | null;
   latestDecision: { decision: string; message: string | null } | null;
   eligibleFromDate: string;
+  previousDates: string[];
 }
+
+// Custom day cell so previously-used dates (from an earlier record in the same continuation
+// chain) can show a grey diagonal strike-through — react-native-calendars' built-in marking
+// types don't support that, only dot/period/background styling.
+function DayCell({ date, state, marking, onPress }: any) {
+  const isPrevious = !!marking?.isPreviouslyUsed;
+  const isSelected = !!marking?.selected;
+  const disabled = state === "disabled" || isPrevious;
+  return (
+    <TouchableOpacity disabled={disabled} onPress={() => date && onPress?.(date)} style={dayCellStyles.cell}>
+      <View style={[dayCellStyles.circle, isSelected && { backgroundColor: marking.selectedColor }]}>
+        <Text
+          style={[
+            dayCellStyles.text,
+            state === "disabled" && { color: colors.border },
+            isPrevious && { color: colors.textMuted },
+            isSelected && { color: "#fff", fontWeight: "700" },
+          ]}
+        >
+          {date?.day}
+        </Text>
+        {isPrevious && <View style={dayCellStyles.strike} />}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const dayCellStyles = StyleSheet.create({
+  cell: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  circle: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  text: { fontSize: 14, color: colors.text },
+  strike: { position: "absolute", width: 22, height: 1.5, backgroundColor: colors.textMuted, transform: [{ rotate: "45deg" }] },
+});
 
 export default function ProductionDetailScreen() {
   const navigation = useNavigation<any>();
@@ -162,8 +196,10 @@ export default function ProductionDetailScreen() {
     return d.toISOString().slice(0, 10);
   })();
 
+  const previousDatesSet = new Set(record.previousDates);
+
   function toggleDate(dateStr: string) {
-    if (dateStr < minEligibleDate) return;
+    if (dateStr < minEligibleDate || previousDatesSet.has(dateStr)) return;
     const existing = localDates.find((d) => d.date.slice(0, 10) === dateStr);
     if (existing) {
       setLocalDates((prev) => prev.filter((d) => d.id !== existing.id));
@@ -364,7 +400,10 @@ export default function ProductionDetailScreen() {
     try {
       await persistChanges();
       await apiFetch(`/api/work-records/${id}/submit`, { method: "POST", body: JSON.stringify({ fullMemberId: selectedFm.id }) });
-      navigation.navigate("Work");
+      // ProductionDetail is a sibling of the tab navigator in the root stack, not nested
+      // inside it — navigate("Work") can't resolve a bare tab name from here.
+      navigation.navigate("Main", { screen: "Work" });
+      Alert.alert("Submitted", "Your work record has been submitted for approval.");
     } catch (err: any) {
       setError(err.message);
       setSubmitting(false);
@@ -385,6 +424,10 @@ export default function ProductionDetailScreen() {
   for (const d of localDates) {
     const key = d.date.slice(0, 10);
     markedDates[key] = { selected: true, selectedColor: d.status === "REJECTED" ? colors.red : colors.green };
+  }
+  for (const dateStr of record.previousDates) {
+    if (!markedDates[dateStr]) markedDates[dateStr] = {};
+    markedDates[dateStr].isPreviouslyUsed = true;
   }
   const approvedDaysDisplay = localDates.filter((d) => d.status === "CLAIMED").length;
 
@@ -438,10 +481,14 @@ export default function ProductionDetailScreen() {
             onDayPress={(day) => isOwnerOngoing && toggleDate(day.dateString)}
             minDate={minEligibleDate}
             disableAllTouchEventsForDisabledDays
+            dayComponent={DayCell}
             theme={{ selectedDayBackgroundColor: colors.green, todayTextColor: colors.green, arrowColor: colors.green }}
           />
           {!isOwnerOngoing && <Text style={styles.muted}>Tap dates are disabled — this record is locked.</Text>}
           {isOwnerOngoing && <Text style={styles.muted}>Dates before {minEligibleDate} are outside your current grade period and can't be claimed.</Text>}
+          {record.previousDates.length > 0 && (
+            <Text style={styles.muted}>Greyed-out dates with a line through them were already claimed on an earlier production in this chain.</Text>
+          )}
         </Card>
 
         <Card style={{ marginTop: 12 }}>

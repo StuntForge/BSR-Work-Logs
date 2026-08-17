@@ -6,7 +6,7 @@ import { apiFetch } from "../api/client";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
 import { KeyboardAvoider } from "../components/KeyboardAvoider";
-import { IconCalendar, IconDocument, IconIdCard, IconScale, IconCheckCircle, IconXCircle } from "../components/Icons";
+import { IconCalendar, IconDocument, IconIdCard, IconScale, IconCheckCircle, IconXCircle, IconPencil } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
 
@@ -19,6 +19,13 @@ interface RecordDetail {
   workDates: { id: string; date: string; status: string }[];
   identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string }[];
   evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
+}
+interface LocalIdentifiableDecision {
+  id: string;
+  categoryLabel: string;
+  performerDescription: string;
+  verifiedDescription: string;
+  decision: "PENDING" | "APPROVED" | "REJECTED";
 }
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
@@ -48,12 +55,24 @@ export default function ReviewScreen() {
   // Local, optimistic copy of workDates so rejecting a date updates the calendar instantly
   // instead of waiting on the server round trip.
   const [localDates, setLocalDates] = useState<RecordDetail["workDates"]>([]);
+  // Identifiable decisions are local-only until the final Approve/Reject — this is a short
+  // single-sitting review, no need to persist partial progress if the FM leaves the screen.
+  const [localIdentifiables, setLocalIdentifiables] = useState<LocalIdentifiableDecision[]>([]);
   const scrollRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
     setRecord(data.record);
     setLocalDates(data.record.workDates);
+    setLocalIdentifiables(
+      data.record.identifiables.map((i) => ({
+        id: i.id,
+        categoryLabel: i.category.label,
+        performerDescription: i.performerDescription,
+        verifiedDescription: i.verifiedDescription ?? i.performerDescription,
+        decision: i.status === "SUBMITTED" ? "PENDING" : i.status === "APPROVED" ? "APPROVED" : "REJECTED",
+      }))
+    );
   }, [id]);
 
   useFocusEffect(
@@ -78,13 +97,11 @@ export default function ReviewScreen() {
     apiFetch(`/api/work-records/${id}/dates/${dateId}/reject`, { method: "POST" }).catch(() => load());
   }
 
-  async function decideIdentifiable(identifiableId: string, action: "approve" | "reject" | "edit", verifiedDescription?: string) {
-    await apiFetch(`/api/work-records/${id}/identifiables/${identifiableId}/decision`, {
-      method: "PATCH",
-      body: JSON.stringify({ action, verifiedDescription }),
-    });
+  function decideIdentifiableLocal(identifiableId: string, decision: "APPROVED" | "REJECTED", verifiedDescription?: string) {
+    setLocalIdentifiables((prev) =>
+      prev.map((i) => (i.id === identifiableId ? { ...i, decision, verifiedDescription: verifiedDescription ?? i.verifiedDescription } : i))
+    );
     setEditingId(null);
-    load();
   }
 
   async function completeDecision(decision: "APPROVED" | "REJECTED") {
@@ -92,9 +109,25 @@ export default function ReviewScreen() {
       setError("A reason is required when rejecting.");
       return;
     }
+    if (decision === "APPROVED" && localIdentifiables.some((i) => i.decision === "PENDING")) {
+      setError("Respond to every identifiable (Approve, Edit, or Reject) before approving this work record.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
+      const decided = localIdentifiables.filter((i) => i.decision !== "PENDING");
+      await Promise.all(
+        decided.map((i) =>
+          apiFetch(`/api/work-records/${id}/identifiables/${i.id}/decision`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              action: i.decision === "APPROVED" ? "edit" : "reject",
+              verifiedDescription: i.decision === "APPROVED" ? i.verifiedDescription : undefined,
+            }),
+          })
+        )
+      );
       await apiFetch(`/api/work-records/${id}/decision`, { method: "POST", body: JSON.stringify({ decision, message: message || undefined }) });
       refreshBadges();
       navigation.goBack();
@@ -155,46 +188,51 @@ export default function ReviewScreen() {
         </Card>
 
         <Card style={styles.card}>
-          <SectionHeader icon={<IconIdCard size={17} color={colors.tealDark} />} label={`IDENTIFIABLES (${record.identifiables.length})`} />
-          {record.identifiables.map((idf) => (
-            <View key={idf.id} style={styles.idRow}>
-              <Text style={styles.idCategory}>{idf.category.label}</Text>
+          <SectionHeader icon={<IconIdCard size={17} color={colors.tealDark} />} label={`IDENTIFIABLES (${localIdentifiables.length})`} />
+          {localIdentifiables.map((idf, i) => (
+            <View key={idf.id} style={[styles.idBlock, i > 0 && styles.idBlockDivider]}>
+              <View style={styles.idHeaderRow}>
+                <IconCircle tone="teal" size={44}>
+                  <IconIdCard size={20} color={colors.tealDark} />
+                </IconCircle>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.idCategory}>{idf.categoryLabel}</Text>
+                  {editingId !== idf.id && <Text style={styles.idDesc}>{idf.verifiedDescription}</Text>}
+                </View>
+              </View>
+
               {editingId === idf.id ? (
-                <View>
+                <View style={{ marginTop: 10 }}>
                   <TextInput style={styles.input} value={editText} onChangeText={setEditText} multiline />
-                  <View style={styles.row}>
-                    <Button title="Save & Approve" onPress={() => decideIdentifiable(idf.id, "edit", editText)} />
+                  <View style={{ marginTop: 10, gap: 8 }}>
+                    <Button title="Save & Approve" onPress={() => decideIdentifiableLocal(idf.id, "APPROVED", editText)} />
                     <Button title="Cancel" variant="secondary" onPress={() => setEditingId(null)} />
                   </View>
                 </View>
+              ) : idf.decision !== "PENDING" ? (
+                <View style={{ marginTop: 10 }}>
+                  <Badge label={idf.decision} tone={idf.decision === "APPROVED" ? "green" : "red"} />
+                </View>
               ) : (
-                <>
-                  <Text>{idf.verifiedDescription ?? idf.performerDescription}</Text>
-                  {idf.status !== "SUBMITTED" ? (
-                    <View style={{ marginTop: 6 }}>
-                      <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />
-                    </View>
-                  ) : (
-                    isReviewable && (
-                      <View style={styles.row}>
-                        <Button title="Approve" onPress={() => decideIdentifiable(idf.id, "approve")} />
-                        <Button
-                          title="Edit"
-                          variant="secondary"
-                          onPress={() => {
-                            setEditingId(idf.id);
-                            setEditText(idf.performerDescription);
-                          }}
-                        />
-                        <Button title="Reject" variant="danger" onPress={() => decideIdentifiable(idf.id, "reject")} />
-                      </View>
-                    )
-                  )}
-                </>
+                isReviewable && (
+                  <View style={{ marginTop: 12, gap: 8 }}>
+                    <Button title="Approve" icon={<IconCheckCircle size={16} color="#fff" />} onPress={() => decideIdentifiableLocal(idf.id, "APPROVED")} />
+                    <Button
+                      title="Edit"
+                      variant="secondary"
+                      icon={<IconPencil size={16} color={colors.text} />}
+                      onPress={() => {
+                        setEditingId(idf.id);
+                        setEditText(idf.verifiedDescription);
+                      }}
+                    />
+                    <Button title="Reject" variant="danger" icon={<IconXCircle size={16} color="#fff" />} onPress={() => decideIdentifiableLocal(idf.id, "REJECTED")} />
+                  </View>
+                )
               )}
             </View>
           ))}
-          {record.identifiables.length === 0 && <Text style={styles.muted}>None submitted.</Text>}
+          {localIdentifiables.length === 0 && <Text style={styles.muted}>None submitted.</Text>}
         </Card>
 
         {isReviewable ? (
@@ -236,8 +274,11 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 13, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.4 },
   plainLabel: { fontSize: 12, fontWeight: "800", color: colors.textMuted, letterSpacing: 0.4 },
   bigNumber: { fontSize: 30, fontWeight: "800", color: colors.tealDark, marginTop: 4 },
-  idRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-  idCategory: { fontSize: 12, fontWeight: "700", color: colors.tealDark, marginBottom: 2 },
+  idBlock: { paddingVertical: 14 },
+  idBlockDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  idHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  idCategory: { fontSize: 16, fontWeight: "800", color: colors.tealDark, marginBottom: 2 },
+  idDesc: { fontSize: 14, color: colors.text },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, backgroundColor: colors.white, marginTop: 6 },
   muted: { color: colors.textMuted, fontSize: 13, marginTop: 6 },
 });

@@ -19,33 +19,33 @@ const AREA_CATEGORIES = [
   { key: "FIR", label: "Fire", order: 5, items: [] as string[] },
 ];
 
-// Illustrative thresholds for the 4 upgrade routes — placeholders BSR can tune later
-// (no dedicated admin UI for this in V1; spec §23 doesn't list it). MIN_TIME_AT_GRADE
-// targetValue is in whole days. HEALTH_SAFETY targetValue is the required level (explicit BSR
-// policy: 1/2/3/4 rising with grade), set per member by the committee, never self-service.
+// Explicit BSR policy given directly, per upgrade route. MIN_TIME_AT_GRADE targetValue is in
+// whole days (years * 365). HEALTH_SAFETY targetValue is the required level, set per member by
+// the committee, never self-service. Only the Stunt Performer -> Senior route requires
+// identifiables — the "under at least 3 different coordinators" sub-condition and the Senior ->
+// Key (solo days / core-team jobs) and Key -> Full Member (points) composite requirements are
+// NOT enforced yet: no data capture exists for coordinator identity, solo days, core-team jobs,
+// or points, so those routes are currently missing their 4th requirement pending that build-out.
 const REQUIREMENTS: Record<string, { type: string; targetValue: number }[]> = {
   STUNT_PERFORMER: [
-    { type: "DAYS_WORKED", targetValue: 40 },
-    { type: "IDENTIFIABLES", targetValue: 10 },
+    { type: "DAYS_WORKED", targetValue: 60 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 365 },
     { type: "HEALTH_SAFETY", targetValue: 1 },
   ],
   SENIOR_STUNT_PERFORMER: [
     { type: "DAYS_WORKED", targetValue: 160 },
     { type: "IDENTIFIABLES", targetValue: 40 },
-    { type: "MIN_TIME_AT_GRADE", targetValue: 730 },
+    { type: "MIN_TIME_AT_GRADE", targetValue: 1095 },
     { type: "HEALTH_SAFETY", targetValue: 2 },
   ],
   KEY_STUNT_PERFORMER: [
-    { type: "DAYS_WORKED", targetValue: 240 },
-    { type: "IDENTIFIABLES", targetValue: 60 },
-    { type: "MIN_TIME_AT_GRADE", targetValue: 1095 },
+    { type: "DAYS_WORKED", targetValue: 120 },
+    { type: "MIN_TIME_AT_GRADE", targetValue: 730 },
     { type: "HEALTH_SAFETY", targetValue: 3 },
   ],
   FULL_MEMBER: [
-    { type: "DAYS_WORKED", targetValue: 320 },
-    { type: "IDENTIFIABLES", targetValue: 80 },
-    { type: "MIN_TIME_AT_GRADE", targetValue: 1460 },
+    { type: "DAYS_WORKED", targetValue: 160 },
+    { type: "MIN_TIME_AT_GRADE", targetValue: 730 },
     { type: "HEALTH_SAFETY", targetValue: 4 },
   ],
 };
