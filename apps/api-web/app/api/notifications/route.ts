@@ -24,3 +24,16 @@ export async function GET(req: NextRequest) {
     return serverError(err);
   }
 }
+
+// DELETE /api/notifications — "Clear all" for the signed-in user.
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getSession(req);
+    if (!session) return unauthorized();
+
+    await prisma.notification.deleteMany({ where: { userId: session.id } });
+    return ok({ success: true });
+  } catch (err) {
+    return serverError(err);
+  }
+}

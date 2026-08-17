@@ -15,7 +15,10 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const session = await getSession(req);
     if (!session) return unauthorized();
 
-    const record = await prisma.workRecord.findUnique({ where: { id: params.id }, include: { gradeHistory: true } });
+    const record = await prisma.workRecord.findUnique({
+      where: { id: params.id },
+      include: { gradeHistory: true, performer: { select: { lastUpgradedAt: true } } },
+    });
     if (!record) return notFound();
     if (record.performerId !== session.id) return forbidden();
     if (record.status !== "ONGOING") return forbidden("Only Ongoing records accept new dates.");
@@ -26,8 +29,11 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const parsedDates = body.data.dates.map((d) => new Date(d));
     if (parsedDates.some((d) => isNaN(d.getTime()))) return badRequest("Invalid date.");
 
-    // Server-side cutoff enforcement, not only UI (spec §6, §29).
-    const ineligible = parsedDates.filter((d) => !isDateEligibleForPeriod(d, record.gradeHistory.startedAt));
+    // Server-side cutoff enforcement, not only UI (spec §6, §29). lastUpgradedAt is the
+    // committee-editable override (see lib/progress.ts) — same effective boundary as everywhere
+    // else, so a corrected historical join/upgrade date also unlocks earlier dates here.
+    const effectiveStart = record.performer.lastUpgradedAt ?? record.gradeHistory.startedAt;
+    const ineligible = parsedDates.filter((d) => !isDateEligibleForPeriod(d, effectiveStart));
     if (ineligible.length > 0) {
       return badRequest("One or more dates fall before your current grade period started and cannot be claimed.");
     }

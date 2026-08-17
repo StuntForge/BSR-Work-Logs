@@ -9,7 +9,7 @@ import { getToken } from "../api/storage";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
 import { KeyboardAvoider } from "../components/KeyboardAvoider";
-import { IconIdCard, IconChevronDown, IconPlus, IconTrash } from "../components/Icons";
+import { IconIdCard, IconChevronDown, IconPlus, IconTrash, IconCheck } from "../components/Icons";
 import { colors } from "../theme";
 import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION, WORK_LOCATION_LABELS } from "@bsr/shared";
 
@@ -24,6 +24,19 @@ interface WorkDate {
   id: string;
   date: string;
   status: string;
+}
+interface LocalIdentifiable {
+  id: string;
+  categoryId: string;
+  categoryLabel: string;
+  performerDescription: string;
+  verifiedDescription: string | null;
+  status: string;
+}
+interface LocalEvidence {
+  id: string;
+  fileName: string;
+  pendingAsset?: { uri: string; name: string; mimeType: string };
 }
 interface RecordDetail {
   id: string;
@@ -58,7 +71,6 @@ export default function ProductionDetailScreen() {
   const [comments, setComments] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [uploadingEvidence, setUploadingEvidence] = useState(false);
 
   const [showIdModal, setShowIdModal] = useState(false);
 
@@ -68,9 +80,12 @@ export default function ProductionDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Calendar taps only ever touch this local state — nothing is sent to the server until the
-  // performer navigates back, which saves in the background against record.workDates.
+  // Calendar taps, identifiables, and evidence picks all only touch local state — nothing is
+  // sent to the server until the performer navigates back, which saves everything together
+  // against the record as last loaded.
   const [localDates, setLocalDates] = useState<WorkDate[]>([]);
+  const [localIdentifiables, setLocalIdentifiables] = useState<LocalIdentifiable[]>([]);
+  const [localEvidence, setLocalEvidence] = useState<LocalEvidence[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +96,17 @@ export default function ProductionDetailScreen() {
     setRiskAssessment(!!data.record.riskAssessment);
     setComments(data.record.comments ?? "");
     setLocalDates(data.record.workDates);
+    setLocalIdentifiables(
+      data.record.identifiables.map((i) => ({
+        id: i.id,
+        categoryId: i.category.id,
+        categoryLabel: i.category.label,
+        performerDescription: i.performerDescription,
+        verifiedDescription: i.verifiedDescription,
+        status: i.status,
+      }))
+    );
+    setLocalEvidence(data.record.evidenceDocuments.map((d) => ({ id: d.id, fileName: d.fileName })));
     setLoading(false);
   }, [id]);
 
@@ -140,18 +166,51 @@ export default function ProductionDetailScreen() {
     setLocations((prev) => (prev.includes(loc) ? prev.filter((l) => l !== loc) : [...prev, loc]));
   }
 
+  async function uploadOneFile(asset: { uri: string; name: string; mimeType: string }, token: string | null) {
+    const formData = new FormData();
+    formData.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType } as any);
+    const res = await fetch(`${API_URL}/api/work-records/${id}/evidence`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || `Failed to upload ${asset.name}.`);
+    }
+  }
+
   // Sends whatever is currently in local state to the server. Does NOT refresh local state
   // afterwards — safe to fire-and-forget when navigating away (e.g. on back-press).
   async function persistChanges() {
     if (!record) return;
-    const localIds = new Set(localDates.map((d) => d.id));
-    const removedIds = record.workDates.filter((d) => !localIds.has(d.id)).map((d) => d.id);
+    const localDateIds = new Set(localDates.map((d) => d.id));
+    const removedDateIds = record.workDates.filter((d) => !localDateIds.has(d.id)).map((d) => d.id);
     const addedDates = localDates.filter((d) => d.id.startsWith("pending-")).map((d) => d.date);
+
+    const localIdentifiableIds = new Set(localIdentifiables.map((i) => i.id));
+    const removedIdentifiableIds = record.identifiables.filter((i) => !localIdentifiableIds.has(i.id)).map((i) => i.id);
+    const addedIdentifiables = localIdentifiables.filter((i) => i.id.startsWith("pending-"));
+
+    const localEvidenceIds = new Set(localEvidence.map((e) => e.id));
+    const removedEvidenceIds = record.evidenceDocuments.filter((e) => !localEvidenceIds.has(e.id)).map((e) => e.id);
+    const addedEvidence = localEvidence.filter((e) => e.pendingAsset);
+
+    const token = await getToken();
 
     await Promise.all([
       apiFetch(`/api/work-records/${id}`, { method: "PATCH", body: JSON.stringify({ jobDescription, locations, riskAssessment, comments }) }),
       addedDates.length > 0 ? apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: addedDates }) }) : Promise.resolve(),
-      ...removedIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
+      ...removedDateIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
+      ...addedIdentifiables.map((idf) =>
+        apiFetch(`/api/work-records/${id}/identifiables`, {
+          method: "POST",
+          body: JSON.stringify({ categoryId: idf.categoryId, performerDescription: idf.performerDescription }),
+        })
+      ),
+      ...removedIdentifiableIds.map((iid) => apiFetch(`/api/work-records/${id}/identifiables/${iid}`, { method: "DELETE" })),
+      ...addedEvidence.map((ev) => uploadOneFile(ev.pendingAsset!, token)),
+      ...removedEvidenceIds.map((eid) => apiFetch(`/api/work-records/${id}/evidence/${eid}`, { method: "DELETE" })),
     ]);
   }
 
@@ -215,58 +274,44 @@ export default function ProductionDetailScreen() {
     }
   }
 
-  async function addIdentifiable(categoryId: string, description: string) {
-    await apiFetch(`/api/work-records/${id}/identifiables`, {
-      method: "POST",
-      body: JSON.stringify({ categoryId, performerDescription: description }),
-    });
+  function addIdentifiableLocal(categoryId: string, description: string) {
+    const category = categories.find((c) => c.id === categoryId);
+    setLocalIdentifiables((prev) => [
+      ...prev,
+      {
+        id: `pending-${Date.now()}`,
+        categoryId,
+        categoryLabel: category?.label ?? "",
+        performerDescription: description,
+        verifiedDescription: null,
+        status: "SUBMITTED",
+      },
+    ]);
     setShowIdModal(false);
-    load();
   }
 
-  async function removeIdentifiable(identifiableId: string) {
-    await apiFetch(`/api/work-records/${id}/identifiables/${identifiableId}`, { method: "DELETE" });
-    load();
+  function removeIdentifiableLocal(identifiableId: string) {
+    setLocalIdentifiables((prev) => prev.filter((i) => i.id !== identifiableId));
   }
 
-  async function uploadEvidence() {
+  async function pickEvidence() {
     const result = await DocumentPicker.getDocumentAsync({
       type: ["application/pdf", "image/jpeg", "image/png"],
       multiple: true,
     });
     if (result.canceled || !result.assets?.length) return;
-    setUploadingEvidence(true);
-    setError(null);
-    const token = await getToken();
-    const failures: string[] = [];
-    for (const asset of result.assets) {
-      try {
-        const formData = new FormData();
-        // RN's fetch/FormData accepts a {uri,name,type} descriptor and streams the file
-        // natively — fetch(uri).blob() is the web pattern and is unreliable here, especially
-        // for content:// URIs Android's document picker often returns.
-        formData.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType || "application/octet-stream" } as any);
-        const res = await fetch(`${API_URL}/api/work-records/${id}/evidence`, {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          body: formData,
-        });
-        if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          failures.push(`${asset.name}: ${d.error || "Upload failed."}`);
-        }
-      } catch (err: any) {
-        failures.push(`${asset.name}: ${err?.message || "Upload failed."}`);
-      }
-    }
-    setUploadingEvidence(false);
-    if (failures.length > 0) setError(failures.join("\n"));
-    load();
+    setLocalEvidence((prev) => [
+      ...prev,
+      ...result.assets.map((asset) => ({
+        id: `pending-${Date.now()}-${asset.name}`,
+        fileName: asset.name,
+        pendingAsset: { uri: asset.uri, name: asset.name, mimeType: asset.mimeType || "application/octet-stream" },
+      })),
+    ]);
   }
 
-  async function removeEvidence(evidenceId: string) {
-    await apiFetch(`/api/work-records/${id}/evidence/${evidenceId}`, { method: "DELETE" });
-    load();
+  function removeEvidenceLocal(evidenceId: string) {
+    setLocalEvidence((prev) => prev.filter((e) => e.id !== evidenceId));
   }
 
   function confirmSubmit() {
@@ -287,7 +332,7 @@ export default function ProductionDetailScreen() {
       setError("Select at least one location before submitting.");
       return;
     }
-    if (record.evidenceDocuments.length === 0) {
+    if (localEvidence.length === 0) {
       setError("Upload at least one file before submitting.");
       return;
     }
@@ -309,10 +354,9 @@ export default function ProductionDetailScreen() {
     try {
       await persistChanges();
       await apiFetch(`/api/work-records/${id}/submit`, { method: "POST", body: JSON.stringify({ fullMemberId: selectedFm.id }) });
-      load();
+      navigation.navigate("Work");
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setSubmitting(false);
     }
   }
@@ -336,7 +380,16 @@ export default function ProductionDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header variant="detail" title="Production" onBack={handleBack} />
+      <Header
+        variant="detail"
+        title="Production"
+        onBack={handleBack}
+        backIcon={
+          isOwnerOngoing ? (
+            <View style={styles.backTick}>{saving ? <ActivityIndicator size="small" color="#fff" /> : <IconCheck size={20} color="#fff" />}</View>
+          ) : undefined
+        }
+      />
       <KeyboardAvoider>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View style={styles.rowBetween}>
@@ -411,10 +464,10 @@ export default function ProductionDetailScreen() {
 
         <Card style={{ marginTop: 12 }}>
           <Text style={styles.sectionLabel}>Identifiables</Text>
-          {record.identifiables.map((idf) => (
+          {localIdentifiables.map((idf) => (
             <View key={idf.id} style={styles.idRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.idCategory}>{idf.category.label}</Text>
+                <Text style={styles.idCategory}>{idf.categoryLabel}</Text>
                 <Text>{idf.verifiedDescription ?? idf.performerDescription}</Text>
                 {idf.status !== "SUBMITTED" && (
                   <View style={{ marginTop: 4 }}>
@@ -423,13 +476,13 @@ export default function ProductionDetailScreen() {
                 )}
               </View>
               {isOwnerOngoing && (
-                <TouchableOpacity onPress={() => removeIdentifiable(idf.id)}>
+                <TouchableOpacity onPress={() => removeIdentifiableLocal(idf.id)}>
                   <Text style={{ color: colors.red }}>Remove</Text>
                 </TouchableOpacity>
               )}
             </View>
           ))}
-          {record.identifiables.length === 0 && <Text style={styles.muted}>None added yet.</Text>}
+          {localIdentifiables.length === 0 && <Text style={styles.muted}>None added yet.</Text>}
 
           {isOwnerOngoing && (
             <View style={{ marginTop: 12 }}>
@@ -440,26 +493,23 @@ export default function ProductionDetailScreen() {
 
         <Card style={{ marginTop: 12 }}>
           <Text style={styles.sectionLabel}>Contract / evidence</Text>
-          {record.evidenceDocuments.map((doc) => (
+          {localEvidence.map((doc) => (
             <View key={doc.id} style={styles.idRow}>
-              <Text style={{ flex: 1 }}>{doc.fileName}</Text>
+              <Text style={{ flex: 1 }}>
+                {doc.fileName}
+                {doc.pendingAsset ? " (not saved yet)" : ""}
+              </Text>
               {isOwnerOngoing && (
-                <TouchableOpacity onPress={() => removeEvidence(doc.id)}>
+                <TouchableOpacity onPress={() => removeEvidenceLocal(doc.id)}>
                   <Text style={{ color: colors.red }}>Remove</Text>
                 </TouchableOpacity>
               )}
             </View>
           ))}
-          {record.evidenceDocuments.length === 0 && <Text style={styles.muted}>No files uploaded yet.</Text>}
+          {localEvidence.length === 0 && <Text style={styles.muted}>No files uploaded yet.</Text>}
           {isOwnerOngoing && (
             <View style={{ marginTop: 10 }}>
-              <Button
-                title={uploadingEvidence ? "Uploading..." : "Upload Files"}
-                variant="secondary"
-                onPress={uploadEvidence}
-                disabled={uploadingEvidence}
-                loading={uploadingEvidence}
-              />
+              <Button title="Add Files" variant="secondary" onPress={pickEvidence} />
             </View>
           )}
         </Card>
@@ -517,7 +567,7 @@ export default function ProductionDetailScreen() {
       </ScrollView>
       </KeyboardAvoider>
 
-      <AddIdentifiableModal visible={showIdModal} categories={categories} onClose={() => setShowIdModal(false)} onAdd={addIdentifiable} />
+      <AddIdentifiableModal visible={showIdModal} categories={categories} onClose={() => setShowIdModal(false)} onAdd={addIdentifiableLocal} />
     </View>
   );
 }
@@ -531,7 +581,7 @@ function AddIdentifiableModal({
   visible: boolean;
   categories: AreaCategory[];
   onClose: () => void;
-  onAdd: (categoryId: string, description: string) => Promise<void>;
+  onAdd: (categoryId: string, description: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -551,7 +601,7 @@ function AddIdentifiableModal({
 
   const selected = categories.find((c) => c.id === categoryId);
 
-  async function submit() {
+  function submit() {
     if (!categoryId) {
       setError("Select a category.");
       return;
@@ -563,7 +613,7 @@ function AddIdentifiableModal({
     setSaving(true);
     setError(null);
     try {
-      await onAdd(categoryId, description.trim());
+      onAdd(categoryId, description.trim());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -630,6 +680,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
+  backTick: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontWeight: "800", color: colors.tealDark, flexShrink: 1, marginRight: 8 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   row: { flexDirection: "row", gap: 8 },

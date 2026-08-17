@@ -23,13 +23,15 @@ interface HeaderProps {
   rightAction?: { icon: React.ReactNode; onPress: () => void };
   /** detail variant only — overrides the default navigation.goBack(), e.g. to save before leaving. */
   onBack?: () => void;
+  /** detail variant only — overrides the default back arrow, e.g. a tick when back also saves. */
+  backIcon?: React.ReactNode;
 }
 
 // Shared banner header used at the top of every screen. `variant="main"` shows the full logo
 // lockup + sign out (Home/Work/Notifications), anchored near the TOP of the banner; `variant=
 // "detail"` shows a back arrow + title (Production detail, Review, New production). Height
 // always includes the safe-area top inset so content never sits under a notch/status bar.
-export function Header({ variant = "main", title, extraHeight = 0, rightAction, onBack }: HeaderProps) {
+export function Header({ variant = "main", title, extraHeight = 0, rightAction, onBack, backIcon }: HeaderProps) {
   const navigation = useNavigation<any>();
   const { logout } = useAuth();
   const insets = useSafeAreaInsets();
@@ -55,7 +57,7 @@ export function Header({ variant = "main", title, extraHeight = 0, rightAction, 
       ) : (
         <View style={[styles.detailRow, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={onBack ?? (() => navigation.goBack())} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <IconArrowLeft size={24} color="#fff" />
+            {backIcon ?? <IconArrowLeft size={24} color="#fff" />}
           </TouchableOpacity>
           <Text style={[styles.detailTitle, { flex: 1 }]}>{title}</Text>
           {rightAction && (
