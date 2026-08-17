@@ -1,25 +1,48 @@
 {
   "expo": {
-    "name": "BSR Work Records",
-    "slug": "bsr-work-records",
+    "name": "BSR Upgrades",
+    "slug": "bsr-upgrades",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8e949359-8c2e-40cb-b685-a7950e74228d"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stuntforge.bsrworkrecords"
     },
     "android": {
+      "package": "com.stuntforge.bsrworkrecords",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#023c48",
+        "foregroundImage": "./assets/app-icon.png",
+        "monochromeImage": "./assets/app-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/app-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#023c48"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8e949359-8c2e-40cb-b685-a7950e74228d"
+      }
     }
   }
 }

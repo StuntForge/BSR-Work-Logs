@@ -233,6 +233,29 @@ export function IconCheck({ size, color = "#000", strokeWidth = 2.4 }: IconProps
   );
 }
 
+export function IconEye({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg {...base(size, color)}>
+      <Path d="M2 12c2.4-4.8 6.4-7.5 10-7.5s7.6 2.7 10 7.5c-2.4 4.8-6.4 7.5-10 7.5S4.4 16.8 2 12Z" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="12" r="3" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+}
+
+export function IconEyeOff({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg {...base(size, color)}>
+      <Path
+        d="M3.5 3.5l17 17M6.6 6.9C4.4 8.4 2.9 10.2 2 12c2.4 4.8 6.4 7.5 10 7.5 1.6 0 3.2-.5 4.6-1.4M9.9 5.1C10.6 5 11.3 4.9 12 4.9c3.6 0 7.6 2.7 10 7.5-.7 1.4-1.6 2.7-2.6 3.7"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M9.9 10.1a3 3 0 0 0 4.1 4.1" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function IconTrash({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg {...base(size, color)}>
