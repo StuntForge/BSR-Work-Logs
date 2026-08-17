@@ -8,6 +8,19 @@ import { ProgressRing } from "../components/ProgressRing";
 import { IconAward, IconCalendar, IconIdCard, IconCheck } from "../components/Icons";
 import { colors } from "../theme";
 
+interface PointsBreakdown {
+  soloDays: number;
+  soloPoints: number;
+  unitCoordinatorDays: number;
+  unitCoordinatorPoints: number;
+  selfCoordinatingCount: number;
+  selfCoordinatingPoints: number;
+  assistantCoordinatorDays: number;
+  assistantCoordinatorPoints: number;
+  groupABPoints: number;
+  groupCDPoints: number;
+  groupCDCounted: number;
+}
 interface Requirement {
   type: string;
   targetValue: number;
@@ -15,6 +28,7 @@ interface Requirement {
   pendingValue: number;
   met: boolean;
   detail?: string;
+  pointsBreakdown?: PointsBreakdown;
 }
 interface HomeData {
   name: string;
@@ -88,7 +102,10 @@ export default function HomeScreen() {
   const overallPercent = totalCount > 0 ? Math.round(data.requirements.reduce((sum, r) => sum + Math.min(100, (r.approvedValue / Math.max(r.targetValue, 1)) * 100), 0) / totalCount) : 0;
 
   const timeReq = data.requirements.find((r) => r.type === "MIN_TIME_AT_GRADE");
-  const otherReqs = data.requirements.filter((r) => r.type !== "MIN_TIME_AT_GRADE");
+  // Health & Safety always renders last, regardless of backend order.
+  const otherReqs = data.requirements
+    .filter((r) => r.type !== "MIN_TIME_AT_GRADE")
+    .sort((a, b) => (a.type === "HEALTH_SAFETY" ? 1 : 0) - (b.type === "HEALTH_SAFETY" ? 1 : 0));
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -160,15 +177,11 @@ export default function HomeScreen() {
           }
 
           if (req.type === "SOLO_OR_CORE_TEAM") {
-            return (
-              <Card key={req.type} style={styles.reqCard}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={styles.hsLabel}>Solo / Core Team</Text>
-                  <View style={[styles.hsCheckbox, req.met && styles.hsCheckboxMet]}>{req.met && <IconCheck size={20} color="#fff" />}</View>
-                </View>
-                {req.detail && <Text style={styles.soloDetail}>{req.detail}</Text>}
-              </Card>
-            );
+            return <SoloOrCoreTeamCard key={req.type} req={req} />;
+          }
+
+          if (req.type === "POINTS" && req.pointsBreakdown) {
+            return <PointsCard key={req.type} req={req} pb={req.pointsBreakdown} />;
           }
 
           const percent = req.targetValue > 0 ? Math.min(100, (req.approvedValue / req.targetValue) * 100) : 0;
@@ -219,6 +232,171 @@ export default function HomeScreen() {
     </View>
   );
 }
+
+// Senior -> Key composite: met by ANY of 10 solo days, OR 5 solo + 1 core-team job, OR 2
+// core-team jobs. approvedValue carries soloDays, pendingValue carries qualifyingCoreJobs (set
+// server-side in lib/progress.ts). Whichever option is actually satisfied gets highlighted green;
+// once any option is met, the other two are struck through as not required.
+function SoloOrCoreTeamCard({ req }: { req: Requirement }) {
+  const soloDays = req.approvedValue;
+  const coreJobs = req.pendingValue;
+  const optionAMet = soloDays >= 10;
+  const optionBMet = soloDays >= 5 && coreJobs >= 1;
+  const optionCMet = coreJobs >= 2;
+  const anyMet = optionAMet || optionBMet || optionCMet;
+  const fulfilled = optionAMet ? "A" : optionBMet ? "B" : optionCMet ? "C" : null;
+
+  function Box({ met, children }: { met: boolean; children: React.ReactNode }) {
+    const dimmed = anyMet && !met;
+    return <View style={[soloStyles.box, met && soloStyles.boxMet, dimmed && soloStyles.boxDimmed]}>{children}</View>;
+  }
+  function BoxTitle({ text, met }: { text: string; met: boolean }) {
+    const dimmed = anyMet && !met;
+    return (
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={[soloStyles.boxTitle, dimmed && soloStyles.boxTitleDimmed]}>{text}</Text>
+        {met && (
+          <View style={[styles.hsCheckbox, styles.hsCheckboxMet, { width: 24, height: 24, borderRadius: 6 }]}>
+            <IconCheck size={14} color="#fff" />
+          </View>
+        )}
+      </View>
+    );
+  }
+  function OrDivider() {
+    return (
+      <View style={soloStyles.orDivider}>
+        <View style={soloStyles.orLine} />
+        <Text style={soloStyles.orText}>OR</Text>
+        <View style={soloStyles.orLine} />
+      </View>
+    );
+  }
+
+  return (
+    <Card style={styles.reqCard}>
+      <Text style={[styles.reqLabel, { color: colors.tealDark, marginBottom: 10 }]}>SOLO / CORE TEAM — ANY ONE OF</Text>
+
+      <Box met={fulfilled === "A"}>
+        <BoxTitle text="10 Solo Days" met={fulfilled === "A"} />
+        <View style={{ marginTop: 8 }}>
+          <ProgressBar value={Math.min(soloDays, 10)} max={10} color={colors.tealDark} trackColor={colors.border} />
+        </View>
+        <Text style={[soloStyles.boxStat, anyMet && fulfilled !== "A" && soloStyles.boxStatDimmed]}>{soloDays} / 10 solo days</Text>
+      </Box>
+
+      <OrDivider />
+
+      <Box met={fulfilled === "B"}>
+        <BoxTitle text="5 Solo Days + 1 Core-Team Job" met={fulfilled === "B"} />
+        <Text style={[soloStyles.boxSubLabel, { marginTop: 8 }, anyMet && fulfilled !== "B" && soloStyles.boxStatDimmed]}>
+          Solo days: {soloDays} / 5
+        </Text>
+        <ProgressBar value={Math.min(soloDays, 5)} max={5} color={colors.tealDark} trackColor={colors.border} />
+        <Text style={[soloStyles.boxSubLabel, { marginTop: 8 }, anyMet && fulfilled !== "B" && soloStyles.boxStatDimmed]}>
+          Core-team jobs (12+ weeks): {coreJobs} / 1
+        </Text>
+        <ProgressBar value={Math.min(coreJobs, 1)} max={1} color={colors.tealDark} trackColor={colors.border} />
+      </Box>
+
+      <OrDivider />
+
+      <Box met={fulfilled === "C"}>
+        <BoxTitle text="2 Core-Team Jobs" met={fulfilled === "C"} />
+        <View style={{ marginTop: 8 }}>
+          <ProgressBar value={Math.min(coreJobs, 2)} max={2} color={colors.tealDark} trackColor={colors.border} />
+        </View>
+        <Text style={[soloStyles.boxStat, anyMet && fulfilled !== "C" && soloStyles.boxStatDimmed]}>{coreJobs} / 2 core-team jobs (12+ weeks)</Text>
+      </Box>
+    </Card>
+  );
+}
+
+// Key -> Full Member 80-point composite. Solo Day + Unit Coordinator Day is uncapped; Assistant
+// Coordinator Day + Self-Coordinating is capped at 60 points toward the 80 total — which is what
+// mathematically guarantees the "min 20 from Solo/Unit Coordinator" rule without a separate check.
+function PointsCard({ req, pb }: { req: Requirement; pb: PointsBreakdown }) {
+  return (
+    <Card style={styles.reqCard}>
+      <Text style={[styles.reqLabel, { color: colors.tealDark }]}>POINTS</Text>
+      <Text style={styles.reqStat}>
+        {req.approvedValue} / {req.targetValue} points
+      </Text>
+      <View style={{ marginTop: 8 }}>
+        <ProgressBar value={req.approvedValue} max={req.targetValue} color={colors.tealDark} trackColor={colors.border} />
+      </View>
+
+      <View style={pointsStyles.group}>
+        <Text style={pointsStyles.groupTitle}>SOLO DAY & UNIT COORDINATOR DAY</Text>
+        <View style={pointsStyles.itemRow}>
+          <Text style={pointsStyles.itemLabel}>Solo Day - Own Job (2 pts each)</Text>
+          <Text style={pointsStyles.itemValue}>
+            {pb.soloDays} × 2 = {pb.soloPoints}pts
+          </Text>
+        </View>
+        <View style={pointsStyles.itemRow}>
+          <Text style={pointsStyles.itemLabel}>Unit Coordinator Day (1 pt each)</Text>
+          <Text style={pointsStyles.itemValue}>
+            {pb.unitCoordinatorDays} × 1 = {pb.unitCoordinatorPoints}pts
+          </Text>
+        </View>
+        <View style={{ marginTop: 8 }}>
+          <ProgressBar value={Math.min(pb.groupABPoints, 20)} max={20} color={colors.green} trackColor={colors.border} />
+        </View>
+        <Text style={pointsStyles.groupNote}>
+          Minimum 20 points must come from Solo Day + Unit Coordinator Day combined — {pb.groupABPoints} earned so far
+          {pb.groupABPoints > 20 ? " (all of it counts towards your 80)" : ""}.
+        </Text>
+      </View>
+
+      <View style={pointsStyles.group}>
+        <Text style={pointsStyles.groupTitle}>SELF-COORDINATING & ASSISTANT COORDINATOR DAY</Text>
+        <View style={pointsStyles.itemRow}>
+          <Text style={pointsStyles.itemLabel}>Self-Coordinating on another Coordinator's job (1 pt each)</Text>
+          <Text style={pointsStyles.itemValue}>
+            {pb.selfCoordinatingCount} × 1 = {pb.selfCoordinatingPoints}pts
+          </Text>
+        </View>
+        <View style={pointsStyles.itemRow}>
+          <Text style={pointsStyles.itemLabel}>Assistant Coordinator Day (1 pt each)</Text>
+          <Text style={pointsStyles.itemValue}>
+            {pb.assistantCoordinatorDays} × 1 = {pb.assistantCoordinatorPoints}pts
+          </Text>
+        </View>
+        <View style={{ marginTop: 8 }}>
+          <ProgressBar value={pb.groupCDCounted} max={60} color={colors.purple} trackColor={colors.border} />
+        </View>
+        <Text style={pointsStyles.groupNote}>
+          Capped at 60 points towards your 80-point goal — {pb.groupCDPoints} earned, {pb.groupCDCounted} counted
+          {pb.groupCDPoints > 60 ? " (anything beyond 60 here doesn't count further)" : ""}.
+        </Text>
+      </View>
+    </Card>
+  );
+}
+
+const soloStyles = StyleSheet.create({
+  box: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12 },
+  boxMet: { borderColor: colors.green, backgroundColor: colors.greenLight },
+  boxDimmed: { opacity: 0.5 },
+  boxTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
+  boxTitleDimmed: { textDecorationLine: "line-through", color: colors.textMuted },
+  boxSubLabel: { fontSize: 11, fontWeight: "700", color: colors.textMuted },
+  boxStat: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
+  boxStatDimmed: { textDecorationLine: "line-through" },
+  orDivider: { flexDirection: "row", alignItems: "center", marginVertical: 10, gap: 8 },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: { fontSize: 11, fontWeight: "800", color: colors.tealDark, letterSpacing: 1 },
+});
+
+const pointsStyles = StyleSheet.create({
+  group: { marginTop: 16 },
+  groupTitle: { fontSize: 11, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.4, marginBottom: 8 },
+  itemRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
+  itemLabel: { fontSize: 12, color: colors.text, flex: 1, marginRight: 8 },
+  itemValue: { fontSize: 12, fontWeight: "700", color: colors.textMuted },
+  groupNote: { fontSize: 11, color: colors.textMuted, marginTop: 8, lineHeight: 16 },
+});
 
 const styles = StyleSheet.create({
   content: { padding: 18, paddingTop: 14, paddingBottom: 60, gap: 14 },

@@ -25,9 +25,10 @@ const AREA_CATEGORIES = [
 // identifiables — the "under at least 3 different coordinators" sub-condition is a manual
 // check the committee makes when reviewing, not enforced by the app (no coordinator-identity
 // data is captured). SOLO_OR_CORE_TEAM (Senior -> Key) is a composite met by 10 solo days, or 2
-// core-team jobs of 12+ weeks, or 5 solo days + 1 core-team job — see lib/progress.ts. Key ->
-// Full Member's points requirement is NOT enforced yet: no data capture exists for it, so that
-// route is still missing its 4th requirement pending that build-out.
+// core-team jobs of 12+ weeks, or 5 solo days + 1 core-team job — see lib/progress.ts. POINTS
+// (Key -> Full Member) is an 80-point composite: Solo Day-Own Job (2pts) + Unit Coordinator Day
+// (1pt) uncapped, plus Assistant Coordinator Day (1pt) + Self-Coordinating (1pt) capped at 60
+// points toward the 80 total — see lib/progress.ts.
 const REQUIREMENTS: Record<string, { type: string; targetValue: number }[]> = {
   STUNT_PERFORMER: [
     { type: "DAYS_WORKED", targetValue: 60 },
@@ -50,6 +51,7 @@ const REQUIREMENTS: Record<string, { type: string; targetValue: number }[]> = {
     { type: "DAYS_WORKED", targetValue: 160 },
     { type: "MIN_TIME_AT_GRADE", targetValue: 730 },
     { type: "HEALTH_SAFETY", targetValue: 4 },
+    { type: "POINTS", targetValue: 80 },
   ],
 };
 

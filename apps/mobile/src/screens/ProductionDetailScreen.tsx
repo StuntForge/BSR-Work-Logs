@@ -33,6 +33,7 @@ interface LocalIdentifiable {
   performerDescription: string;
   verifiedDescription: string | null;
   status: string;
+  selfCoordinated: boolean;
 }
 interface LocalEvidence {
   id: string;
@@ -50,7 +51,7 @@ interface RecordDetail {
   comments: string | null;
   workDates: WorkDate[];
   approvedDays: number;
-  identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string }[];
+  identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string; selfCoordinated: boolean }[];
   evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
   fullMember: { id: string; name: string } | null;
   latestDecision: { decision: string; message: string | null } | null;
@@ -61,6 +62,8 @@ interface RecordDetail {
   coreJobEndDate: string | null;
   isQualifyingCoreJob: boolean;
   isSoloSubmission: boolean;
+  isUnitCoordinatorDay: boolean;
+  isAssistantCoordinatorDay: boolean;
 }
 
 // Custom day cell so previously-used dates (from an earlier record in the same continuation
@@ -135,6 +138,26 @@ export default function ProductionDetailScreen() {
   // until the dedicated submit-solo endpoint is called.
   const [isSoloSubmission, setIsSoloSubmission] = useState(false);
 
+  // Unit Coordinator / Assistant Coordinator — Key Stunt Performer only, mutually exclusive.
+  // Checking either clears Solo (can't be both) and hides Identifiables (not applicable).
+  const [isUnitCoordinatorDay, setIsUnitCoordinatorDayState] = useState(false);
+  const [isAssistantCoordinatorDay, setIsAssistantCoordinatorDayState] = useState(false);
+
+  function setIsUnitCoordinatorDay(value: boolean) {
+    setIsUnitCoordinatorDayState(value);
+    if (value) {
+      setIsAssistantCoordinatorDayState(false);
+      setIsSoloSubmission(false);
+    }
+  }
+  function setIsAssistantCoordinatorDay(value: boolean) {
+    setIsAssistantCoordinatorDayState(value);
+    if (value) {
+      setIsUnitCoordinatorDayState(false);
+      setIsSoloSubmission(false);
+    }
+  }
+
   // Calendar taps, identifiables, and evidence picks all only touch local state — nothing is
   // sent to the server until the performer navigates back, which saves everything together
   // against the record as last loaded.
@@ -159,6 +182,7 @@ export default function ProductionDetailScreen() {
         performerDescription: i.performerDescription,
         verifiedDescription: i.verifiedDescription,
         status: i.status,
+        selfCoordinated: i.selfCoordinated,
       }))
     );
     setLocalEvidence(data.record.evidenceDocuments.map((d) => ({ id: d.id, fileName: d.fileName })));
@@ -167,6 +191,8 @@ export default function ProductionDetailScreen() {
     setCoreJobEndDate(data.record.coreJobEndDate ? data.record.coreJobEndDate.slice(0, 10) : null);
     setAmendMessage(null);
     setIsSoloSubmission(false);
+    setIsUnitCoordinatorDayState(!!data.record.isUnitCoordinatorDay);
+    setIsAssistantCoordinatorDayState(!!data.record.isAssistantCoordinatorDay);
     setLoading(false);
   }, [id]);
 
@@ -212,6 +238,9 @@ export default function ProductionDetailScreen() {
 
   const isOwnerOngoing = record.status === "ONGOING";
   const isRejected = record.status === "REJECTED";
+  // Approved Solo/Self-Coordinated records were self-authored and self-approved, so the
+  // performer can retract them even after approval — everything else stays locked once decided.
+  const isDeletable = isOwnerOngoing || (record.status === "APPROVED" && record.isSoloSubmission);
 
   // Earliest date the calendar allows tapping — one day after eligibleFromDate, since that
   // boundary itself is exclusive (matches isDateEligibleForPeriod on the server).
@@ -290,14 +319,24 @@ export default function ProductionDetailScreen() {
     await Promise.all([
       apiFetch(`/api/work-records/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ jobDescription, locations, riskAssessment, comments, isCoreJob, coreJobStartDate, coreJobEndDate }),
+        body: JSON.stringify({
+          jobDescription,
+          locations,
+          riskAssessment,
+          comments,
+          isCoreJob,
+          coreJobStartDate,
+          coreJobEndDate,
+          isUnitCoordinatorDay,
+          isAssistantCoordinatorDay,
+        }),
       }),
       addedDates.length > 0 ? apiFetch(`/api/work-records/${id}/dates`, { method: "POST", body: JSON.stringify({ dates: addedDates }) }) : Promise.resolve(),
       ...removedDateIds.map((rid) => apiFetch(`/api/work-records/${id}/dates/${rid}`, { method: "DELETE" })),
       ...addedIdentifiables.map((idf) =>
         apiFetch(`/api/work-records/${id}/identifiables`, {
           method: "POST",
-          body: JSON.stringify({ categoryId: idf.categoryId, performerDescription: idf.performerDescription }),
+          body: JSON.stringify({ categoryId: idf.categoryId, performerDescription: idf.performerDescription, selfCoordinated: idf.selfCoordinated }),
         })
       ),
       ...removedIdentifiableIds.map((iid) => apiFetch(`/api/work-records/${id}/identifiables/${iid}`, { method: "DELETE" })),
@@ -366,7 +405,7 @@ export default function ProductionDetailScreen() {
     }
   }
 
-  function addIdentifiableLocal(categoryId: string, description: string) {
+  function addIdentifiableLocal(categoryId: string, description: string, selfCoordinated: boolean) {
     const category = categories.find((c) => c.id === categoryId);
     setLocalIdentifiables((prev) => [
       ...prev,
@@ -377,6 +416,7 @@ export default function ProductionDetailScreen() {
         performerDescription: description,
         verifiedDescription: null,
         status: "SUBMITTED",
+        selfCoordinated,
       },
     ]);
     setShowIdModal(false);
@@ -477,7 +517,7 @@ export default function ProductionDetailScreen() {
     setError(null);
     Alert.alert(
       "Submit Solo/Self Coordinated?",
-      "ALL of the dates listed must have been self-coordinated, and all must be well evidenced by the supporting documents you've uploaded. This is final and will be instantly approved.",
+      "ALL of the dates listed must have been self-coordinated, and all must be well evidenced by the supporting documents you've uploaded. This is final and once submitted the only way to change it is to delete it and create a new work log.",
       [
         { text: "Go back", style: "cancel" },
         { text: "Submit", onPress: submitSolo },
@@ -519,7 +559,9 @@ export default function ProductionDetailScreen() {
     markedDates[dateStr].isPreviouslyUsed = true;
   }
   const approvedDaysDisplay = localDates.filter((d) => d.status === "CLAIMED").length;
-  const canGoSolo = user?.currentGradeKey === "SENIOR_STUNT_PERFORMER" || user?.currentGradeKey === "KEY_STUNT_PERFORMER";
+  const isKeyMember = user?.currentGradeKey === "KEY_STUNT_PERFORMER";
+  const isCoordinatorDay = isUnitCoordinatorDay || isAssistantCoordinatorDay;
+  const canGoSolo = (user?.currentGradeKey === "SENIOR_STUNT_PERFORMER" || isKeyMember) && !isCoordinatorDay;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -537,14 +579,34 @@ export default function ProductionDetailScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View style={styles.rowBetween}>
           <Text style={styles.title}>{record.productionName}</Text>
-          <View style={{ flexDirection: "row", gap: 6 }}>
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
             {record.isQualifyingCoreJob && <Badge label="Core Team" tone="teal" />}
+            {record.isSoloSubmission && <Badge label="Solo" tone="amber" />}
             <Badge
               label={record.status}
               tone={record.status === "APPROVED" ? "green" : record.status === "SUBMITTED" ? "amber" : record.status === "REJECTED" ? "red" : "gray"}
             />
           </View>
         </View>
+
+        {isOwnerOngoing && isKeyMember && (
+          <Card style={{ marginTop: 12 }}>
+            <View style={[styles.row, { justifyContent: "space-between" }]}>
+              <Text style={styles.label}>Unit Coordinator Day?</Text>
+              <Switch value={isUnitCoordinatorDay} onValueChange={setIsUnitCoordinatorDay} />
+            </View>
+            <View style={[styles.row, { justifyContent: "space-between", marginTop: 10 }]}>
+              <Text style={styles.label}>Assistant Coordinator Day?</Text>
+              <Switch value={isAssistantCoordinatorDay} onValueChange={setIsAssistantCoordinatorDay} />
+            </View>
+            {isCoordinatorDay && (
+              <Text style={styles.muted}>
+                ALL of the days on this record must have been {isUnitCoordinatorDay ? "Unit Coordinator" : "Assistant Coordinator"} days — if they
+                weren't, please create a new work log specifically for these days.
+              </Text>
+            )}
+          </Card>
+        )}
 
         {isRejected && (
           <Card style={{ marginTop: 12, backgroundColor: "#f5e0dc" }}>
@@ -645,34 +707,35 @@ export default function ProductionDetailScreen() {
           </Field>
         </Card>
 
-        <Card style={{ marginTop: 12 }}>
-          <Text style={styles.sectionLabel}>Identifiables</Text>
-          {localIdentifiables.map((idf) => (
-            <View key={idf.id} style={styles.idRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.idCategory}>{idf.categoryLabel}</Text>
-                <Text>{idf.verifiedDescription ?? idf.performerDescription}</Text>
-                {idf.status !== "SUBMITTED" && (
-                  <View style={{ marginTop: 4 }}>
-                    <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />
+        {!isCoordinatorDay && (
+          <Card style={{ marginTop: 12 }}>
+            <Text style={styles.sectionLabel}>Identifiables</Text>
+            {localIdentifiables.map((idf) => (
+              <View key={idf.id} style={styles.idRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.idCategory}>{idf.categoryLabel}</Text>
+                  <Text>{idf.verifiedDescription ?? idf.performerDescription}</Text>
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                    {idf.status !== "SUBMITTED" && <Badge label={idf.status} tone={idf.status === "APPROVED" ? "green" : "red"} />}
+                    {idf.selfCoordinated && <Badge label="Self-Coordinated" tone="amber" />}
                   </View>
+                </View>
+                {isOwnerOngoing && (
+                  <TouchableOpacity onPress={() => removeIdentifiableLocal(idf.id)}>
+                    <Text style={{ color: colors.red }}>Remove</Text>
+                  </TouchableOpacity>
                 )}
               </View>
-              {isOwnerOngoing && (
-                <TouchableOpacity onPress={() => removeIdentifiableLocal(idf.id)}>
-                  <Text style={{ color: colors.red }}>Remove</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-          {localIdentifiables.length === 0 && <Text style={styles.muted}>None added yet.</Text>}
+            ))}
+            {localIdentifiables.length === 0 && <Text style={styles.muted}>None added yet.</Text>}
 
-          {isOwnerOngoing && (
-            <View style={{ marginTop: 12 }}>
-              <Button title="Add Identifiable" variant="secondary" icon={<IconPlus size={16} color={colors.text} />} onPress={() => setShowIdModal(true)} />
-            </View>
-          )}
-        </Card>
+            {isOwnerOngoing && (
+              <View style={{ marginTop: 12 }}>
+                <Button title="Add Identifiable" variant="secondary" icon={<IconPlus size={16} color={colors.text} />} onPress={() => setShowIdModal(true)} />
+              </View>
+            )}
+          </Card>
+        )}
 
         <Card style={{ marginTop: 12 }}>
           <Text style={styles.sectionLabel}>Contract / evidence</Text>
@@ -708,9 +771,13 @@ export default function ProductionDetailScreen() {
               </View>
             )}
 
-            <Text style={styles.muted}>
+            <Text style={[styles.muted, { marginBottom: 14 }]}>
               {isSoloSubmission
                 ? "Upload all evidence of risk assessments, contracts, recce information and any other supporting documentation for every date listed."
+                : isUnitCoordinatorDay
+                ? "ALL of the days listed must have been Unit Coordinator days — if they weren't, please create a new work log specifically for these days."
+                : isAssistantCoordinatorDay
+                ? "ALL of the days listed must have been Assistant Coordinator days — if they weren't, please create a new work log specifically for these days."
                 : SUBMIT_FOR_APPROVAL_HELP_TEXT}
             </Text>
 
@@ -754,7 +821,7 @@ export default function ProductionDetailScreen() {
           </Card>
         )}
 
-        {isOwnerOngoing && (
+        {isDeletable && (
           <View style={{ marginTop: 20 }}>
             <Button
               title={deleting ? "Deleting..." : "Delete work record"}
@@ -769,7 +836,13 @@ export default function ProductionDetailScreen() {
       </ScrollView>
       </KeyboardAvoider>
 
-      <AddIdentifiableModal visible={showIdModal} categories={categories} onClose={() => setShowIdModal(false)} onAdd={addIdentifiableLocal} />
+      <AddIdentifiableModal
+        visible={showIdModal}
+        categories={categories}
+        showSelfCoordinated={isKeyMember}
+        onClose={() => setShowIdModal(false)}
+        onAdd={addIdentifiableLocal}
+      />
 
       <CoreJobDatePickerModal
         visible={datePickerTarget !== null}
@@ -800,18 +873,21 @@ export default function ProductionDetailScreen() {
 function AddIdentifiableModal({
   visible,
   categories,
+  showSelfCoordinated,
   onClose,
   onAdd,
 }: {
   visible: boolean;
   categories: AreaCategory[];
+  showSelfCoordinated: boolean;
   onClose: () => void;
-  onAdd: (categoryId: string, description: string) => void;
+  onAdd: (categoryId: string, description: string, selfCoordinated: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [description, setDescription] = useState("");
+  const [selfCoordinated, setSelfCoordinated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -819,6 +895,7 @@ function AddIdentifiableModal({
     if (visible) {
       setCategoryId(null);
       setDescription("");
+      setSelfCoordinated(false);
       setError(null);
       setShowDropdown(false);
     }
@@ -838,7 +915,7 @@ function AddIdentifiableModal({
     setSaving(true);
     setError(null);
     try {
-      onAdd(categoryId, description.trim());
+      onAdd(categoryId, description.trim(), selfCoordinated);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -882,6 +959,13 @@ function AddIdentifiableModal({
               </View>
             )}
           </Field>
+
+          {showSelfCoordinated && (
+            <View style={[styles.row, { justifyContent: "space-between", marginBottom: 12 }]}>
+              <Text style={styles.label}>Self-Coordinated?</Text>
+              <Switch value={selfCoordinated} onValueChange={setSelfCoordinated} />
+            </View>
+          )}
 
           <Field label="Brief description">
             <TextInput style={[styles.input, { minHeight: 70 }]} multiline value={description} onChangeText={setDescription} placeholder="Describe the identifiable stunt" />

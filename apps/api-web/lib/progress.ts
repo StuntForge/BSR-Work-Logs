@@ -11,6 +11,23 @@ export interface RequirementProgress {
   // Human-readable extra context for requirement types too composite to fit the plain
   // approvedValue/targetValue ratio (currently just SOLO_OR_CORE_TEAM).
   detail?: string;
+  // Structured per-category breakdown for the Key -> Full Member points system — the mobile UI
+  // renders individual category rows/mini-bars from this rather than parsing `detail`.
+  pointsBreakdown?: PointsBreakdown;
+}
+
+export interface PointsBreakdown {
+  soloDays: number;
+  soloPoints: number;
+  unitCoordinatorDays: number;
+  unitCoordinatorPoints: number;
+  selfCoordinatingCount: number;
+  selfCoordinatingPoints: number;
+  assistantCoordinatorDays: number;
+  assistantCoordinatorPoints: number;
+  groupABPoints: number;
+  groupCDPoints: number;
+  groupCDCounted: number;
 }
 
 
@@ -95,7 +112,9 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
     } else if (def.type === "HEALTH_SAFETY") {
       // Level is set by the committee, not the member (spec §25 workflow TBD; explicit policy:
       // required level rises with grade). Met when their current level is at least what's required.
-      const qualification = await prisma.qualification.findFirst({ where: { userId, type: "HEALTH_SAFETY" } });
+      // orderBy makes this deterministic even if a duplicate Qualification row ever exists for
+      // the same user+type — always trust whichever was set most recently.
+      const qualification = await prisma.qualification.findFirst({ where: { userId, type: "HEALTH_SAFETY" }, orderBy: { updatedAt: "desc" } });
       const level = qualification?.level ?? 0;
       requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: level, pendingValue: 0, met: level >= def.targetValue });
     } else if (def.type === "SOLO_OR_CORE_TEAM") {
@@ -124,9 +143,64 @@ export async function computeProgress(userId: string): Promise<ProgressResult> {
         met,
         detail: `${soloDays} solo day${soloDays === 1 ? "" : "s"} · ${qualifyingCoreJobs} qualifying core-team job${qualifyingCoreJobs === 1 ? "" : "s"} (12+ weeks) — needs 10 solo days, or 2 core-team jobs, or 5 solo days + 1 core-team job`,
       });
-    } else {
-      // POINTS — architecture placeholder only, no capture mechanics yet (spec §24, §32).
-      requirements.push({ type: def.type, targetValue: def.targetValue, approvedValue: 0, pendingValue: 0, met: false });
+    } else if (def.type === "POINTS") {
+      // Key -> Full Member composite points system (explicit BSR policy), 4 categories:
+      //   Solo Day - Own Job = 2 pts/day (approved isSoloSubmission days)
+      //   Unit Coordinator Day = 1 pt/day (approved isUnitCoordinatorDay days)
+      //   Self-Coordinating on another Coordinator's job = 1 pt/identifiable (FM-approved
+      //     selfCoordinated identifiables, ignored on records that are themselves Solo)
+      //   Supervision/Assistant Coordinator Day = 1 pt/day (approved isAssistantCoordinatorDay days)
+      // Solo + Unit Coordinator (group A/B) is uncapped. Assistant Coordinator + Self-Coordinating
+      // (group C/D) contributes at most 60 points toward the 80 total — that cap mathematically
+      // guarantees at least 20 points must come from group A/B whenever the total reaches 80, so
+      // no separate minimum check is needed.
+      const soloDays = await prisma.workDate.count({
+        where: { status: "CLAIMED", workRecord: { gradeHistoryId: openPeriod.id, performerId: userId, status: "APPROVED", isSoloSubmission: true } },
+      });
+      const unitCoordinatorDays = await prisma.workDate.count({
+        where: { status: "CLAIMED", workRecord: { gradeHistoryId: openPeriod.id, performerId: userId, status: "APPROVED", isUnitCoordinatorDay: true } },
+      });
+      const assistantCoordinatorDays = await prisma.workDate.count({
+        where: { status: "CLAIMED", workRecord: { gradeHistoryId: openPeriod.id, performerId: userId, status: "APPROVED", isAssistantCoordinatorDay: true } },
+      });
+      const selfCoordinatingCount = await prisma.identifiable.count({
+        where: {
+          status: "APPROVED",
+          selfCoordinated: true,
+          workRecord: { gradeHistoryId: openPeriod.id, performerId: userId, isSoloSubmission: false },
+        },
+      });
+
+      const soloPoints = soloDays * 2;
+      const unitCoordinatorPoints = unitCoordinatorDays * 1;
+      const assistantCoordinatorPoints = assistantCoordinatorDays * 1;
+      const selfCoordinatingPoints = selfCoordinatingCount * 1;
+
+      const groupABPoints = soloPoints + unitCoordinatorPoints;
+      const groupCDPoints = assistantCoordinatorPoints + selfCoordinatingPoints;
+      const groupCDCounted = Math.min(groupCDPoints, 60);
+      const totalPoints = groupABPoints + groupCDCounted;
+
+      requirements.push({
+        type: def.type,
+        targetValue: def.targetValue,
+        approvedValue: totalPoints,
+        pendingValue: 0,
+        met: totalPoints >= def.targetValue,
+        pointsBreakdown: {
+          soloDays,
+          soloPoints,
+          unitCoordinatorDays,
+          unitCoordinatorPoints,
+          selfCoordinatingCount,
+          selfCoordinatingPoints,
+          assistantCoordinatorDays,
+          assistantCoordinatorPoints,
+          groupABPoints,
+          groupCDPoints,
+          groupCDCounted,
+        },
+      });
     }
   }
 

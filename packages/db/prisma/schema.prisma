@@ -199,6 +199,13 @@ model WorkRecord {
   // Solo days requirement and the general Days Worked requirement.
   isSoloSubmission       Boolean           @default(false)
 
+  // Key Stunt Performer only. Marks every claimed day on this record as either a Unit
+  // Coordinator day or an Assistant Coordinator day for the Key -> Full Member points system —
+  // mutually exclusive (enforced server-side), each hides Identifiables (not applicable) and
+  // still goes through normal Full Member review, not instant-approve like Solo.
+  isUnitCoordinatorDay       Boolean       @default(false)
+  isAssistantCoordinatorDay  Boolean       @default(false)
+
   fullMemberId           String?
   fullMember              User?            @relation("WorkRecordFullMember", fields: [fullMemberId], references: [id])
 
@@ -280,6 +287,13 @@ model Identifiable {
   status                IdentifiableStatus  @default(SUBMITTED)
   reviewedAt            DateTime?
   createdAt             DateTime            @default(now())
+
+  // Key Stunt Performer only: performer's own claim that they self-coordinated this specific
+  // stunt on another Coordinator's job. The Full Member can uncheck it while editing during
+  // review — only FM-approved identifiables with this still true count toward the Key -> Full
+  // Member points system's "Self-Coordinating" category. Meaningless (ignored) when the whole
+  // work record is itself a Solo/Self-Coordinated submission.
+  selfCoordinated       Boolean             @default(false)
 
   @@index([workRecordId])
 }

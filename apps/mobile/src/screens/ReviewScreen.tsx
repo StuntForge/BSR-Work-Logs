@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator, Switch } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { Calendar } from "react-native-calendars";
 import { apiFetch } from "../api/client";
@@ -17,8 +17,10 @@ interface RecordDetail {
   performer: { id: string; name: string };
   approvedDays: number;
   workDates: { id: string; date: string; status: string }[];
-  identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string }[];
+  identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string; selfCoordinated: boolean }[];
   evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
+  isUnitCoordinatorDay: boolean;
+  isAssistantCoordinatorDay: boolean;
 }
 interface LocalIdentifiableDecision {
   id: string;
@@ -26,6 +28,7 @@ interface LocalIdentifiableDecision {
   performerDescription: string;
   verifiedDescription: string;
   decision: "PENDING" | "APPROVED" | "REJECTED";
+  selfCoordinated: boolean;
 }
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
@@ -52,6 +55,7 @@ export default function ReviewScreen() {
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [editSelfCoordinated, setEditSelfCoordinated] = useState(false);
   // Local, optimistic copy of workDates so rejecting a date updates the calendar instantly
   // instead of waiting on the server round trip.
   const [localDates, setLocalDates] = useState<RecordDetail["workDates"]>([]);
@@ -71,6 +75,7 @@ export default function ReviewScreen() {
         performerDescription: i.performerDescription,
         verifiedDescription: i.verifiedDescription ?? i.performerDescription,
         decision: i.status === "SUBMITTED" ? "PENDING" : i.status === "APPROVED" ? "APPROVED" : "REJECTED",
+        selfCoordinated: i.selfCoordinated,
       }))
     );
   }, [id]);
@@ -97,9 +102,13 @@ export default function ReviewScreen() {
     apiFetch(`/api/work-records/${id}/dates/${dateId}/reject`, { method: "POST" }).catch(() => load());
   }
 
-  function decideIdentifiableLocal(identifiableId: string, decision: "APPROVED" | "REJECTED", verifiedDescription?: string) {
+  function decideIdentifiableLocal(identifiableId: string, decision: "APPROVED" | "REJECTED", verifiedDescription?: string, selfCoordinated?: boolean) {
     setLocalIdentifiables((prev) =>
-      prev.map((i) => (i.id === identifiableId ? { ...i, decision, verifiedDescription: verifiedDescription ?? i.verifiedDescription } : i))
+      prev.map((i) =>
+        i.id === identifiableId
+          ? { ...i, decision, verifiedDescription: verifiedDescription ?? i.verifiedDescription, selfCoordinated: selfCoordinated ?? i.selfCoordinated }
+          : i
+      )
     );
     setEditingId(null);
   }
@@ -124,6 +133,7 @@ export default function ReviewScreen() {
             body: JSON.stringify({
               action: i.decision === "APPROVED" ? "edit" : "reject",
               verifiedDescription: i.decision === "APPROVED" ? i.verifiedDescription : undefined,
+              selfCoordinated: i.decision === "APPROVED" ? i.selfCoordinated : undefined,
             }),
           })
         )
@@ -156,11 +166,22 @@ export default function ReviewScreen() {
         <Card style={styles.card}>
           <View style={styles.rowBetween}>
             <View>
-              <Text style={styles.plainLabel}>DAYS</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={styles.plainLabel}>DAYS</Text>
+                {record.isUnitCoordinatorDay && <Badge label="UNIT COORDINATOR" tone="teal" />}
+                {record.isAssistantCoordinatorDay && <Badge label="ASSISTANT COORDINATOR" tone="teal" />}
+              </View>
               <Text style={styles.bigNumber}>{claimedCount}</Text>
             </View>
             <Button title={showDates ? "Hide dates" : "View Dates"} variant="secondary" icon={<IconCalendar size={16} color={colors.text} />} onPress={() => setShowDates((s) => !s)} />
           </View>
+          {(record.isUnitCoordinatorDay || record.isAssistantCoordinatorDay) && (
+            <Text style={styles.muted}>
+              {record.isUnitCoordinatorDay
+                ? "Confirm this person worked as a Unit Coordinator for ALL of the days listed."
+                : "Please confirm this person was the assistant coordinator on these days."}
+            </Text>
+          )}
           {showDates && (
             <View style={{ marginTop: 12 }}>
               <Calendar
@@ -187,6 +208,7 @@ export default function ReviewScreen() {
           ))}
         </Card>
 
+        {!record.isUnitCoordinatorDay && !record.isAssistantCoordinatorDay && (
         <Card style={styles.card}>
           <SectionHeader icon={<IconIdCard size={17} color={colors.tealDark} />} label={`IDENTIFIABLES (${localIdentifiables.length})`} />
           {localIdentifiables.map((idf, i) => (
@@ -198,14 +220,23 @@ export default function ReviewScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.idCategory}>{idf.categoryLabel}</Text>
                   {editingId !== idf.id && <Text style={styles.idDesc}>{idf.verifiedDescription}</Text>}
+                  {editingId !== idf.id && idf.selfCoordinated && (
+                    <View style={{ marginTop: 4 }}>
+                      <Badge label="Performer claims: Self-Coordinated" tone="amber" />
+                    </View>
+                  )}
                 </View>
               </View>
 
               {editingId === idf.id ? (
                 <View style={{ marginTop: 10 }}>
                   <TextInput style={styles.input} value={editText} onChangeText={setEditText} multiline />
+                  <View style={[styles.row, { justifyContent: "space-between", marginTop: 10 }]}>
+                    <Text style={styles.plainLabel}>Self-Coordinated?</Text>
+                    <Switch value={editSelfCoordinated} onValueChange={setEditSelfCoordinated} />
+                  </View>
                   <View style={{ marginTop: 10, gap: 8 }}>
-                    <Button title="Save & Approve" onPress={() => decideIdentifiableLocal(idf.id, "APPROVED", editText)} />
+                    <Button title="Save & Approve" onPress={() => decideIdentifiableLocal(idf.id, "APPROVED", editText, editSelfCoordinated)} />
                     <Button title="Cancel" variant="secondary" onPress={() => setEditingId(null)} />
                   </View>
                 </View>
@@ -224,6 +255,7 @@ export default function ReviewScreen() {
                       onPress={() => {
                         setEditingId(idf.id);
                         setEditText(idf.verifiedDescription);
+                        setEditSelfCoordinated(idf.selfCoordinated);
                       }}
                     />
                     <Button title="Reject" variant="danger" icon={<IconXCircle size={16} color="#fff" />} onPress={() => decideIdentifiableLocal(idf.id, "REJECTED")} />
@@ -234,6 +266,7 @@ export default function ReviewScreen() {
           ))}
           {localIdentifiables.length === 0 && <Text style={styles.muted}>None submitted.</Text>}
         </Card>
+        )}
 
         {isReviewable ? (
           <Card style={styles.card}>

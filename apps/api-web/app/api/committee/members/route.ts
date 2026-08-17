@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         currentGrade: gradeKey ? { key: gradeKey as any } : undefined,
         active: activeParam ? activeParam === "true" : undefined,
       },
-      include: { currentGrade: true, qualifications: { where: { type: "HEALTH_SAFETY" } } },
+      include: { currentGrade: true, qualifications: { where: { type: "HEALTH_SAFETY" }, orderBy: { updatedAt: "desc" } } },
       orderBy: { name: "asc" },
     });
 

@@ -10,7 +10,7 @@ async function loadRecordWithDetail(id: string) {
     where: { id },
     include: {
       productionFamily: true,
-      performer: { select: { id: true, name: true, lastUpgradedAt: true, dateJoined: true } },
+      performer: { select: { id: true, name: true, lastUpgradedAt: true, dateJoined: true, currentGrade: true } },
       fullMember: { select: { id: true, name: true } },
       areaItem: { include: { category: true } },
       workDates: { orderBy: { date: "asc" } },
@@ -86,6 +86,8 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         coreJobEndDate: record.coreJobEndDate,
         isQualifyingCoreJob: isQualifyingCoreJob(record.coreJobStartDate, record.coreJobEndDate),
         isSoloSubmission: record.isSoloSubmission,
+        isUnitCoordinatorDay: record.isUnitCoordinatorDay,
+        isAssistantCoordinatorDay: record.isAssistantCoordinatorDay,
         workDates: record.workDates.map((d) => ({ id: d.id, date: d.date, status: d.status })),
         approvedDays: record.workDates.filter((d) => d.status === "CLAIMED").length,
         identifiables: record.identifiables.map((i) => ({
@@ -94,6 +96,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
           performerDescription: i.performerDescription,
           verifiedDescription: i.verifiedDescription,
           status: i.status,
+          selfCoordinated: i.selfCoordinated,
         })),
         evidenceDocuments: record.evidenceDocuments,
         latestDecision: record.workApprovals[0] ?? null,
@@ -115,6 +118,8 @@ const patchSchema = z.object({
   isCoreJob: z.boolean().optional(),
   coreJobStartDate: z.string().nullable().optional(),
   coreJobEndDate: z.string().nullable().optional(),
+  isUnitCoordinatorDay: z.boolean().optional(),
+  isAssistantCoordinatorDay: z.boolean().optional(),
 });
 
 // PATCH /api/work-records/:id — edit ongoing production fields (spec §4.1: Ongoing records are editable)
@@ -124,7 +129,10 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
     const session = await getSession(req);
     if (!session) return unauthorized();
 
-    const record = await prisma.workRecord.findUnique({ where: { id: params.id } });
+    const record = await prisma.workRecord.findUnique({
+      where: { id: params.id },
+      include: { performer: { include: { currentGrade: true } } },
+    });
     if (!record) return notFound();
     if (record.performerId !== session.id) return forbidden();
     if (record.status !== "ONGOING") return forbidden("Only Ongoing records are editable.");
@@ -135,23 +143,40 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
       return badRequest(`Invalid fields — ${details}`);
     }
 
-    const { coreJobStartDate, coreJobEndDate, ...rest } = body.data;
+    const { coreJobStartDate, coreJobEndDate, isUnitCoordinatorDay, isAssistantCoordinatorDay, ...rest } = body.data;
     const startDate: Date | null | undefined = coreJobStartDate ? new Date(coreJobStartDate) : (coreJobStartDate as null | undefined);
     const endDate: Date | null | undefined = coreJobEndDate ? new Date(coreJobEndDate) : (coreJobEndDate as null | undefined);
     if (startDate && endDate && startDate.getTime() >= endDate.getTime()) {
       return badRequest("Core job start date must be before the end date.");
     }
 
-    await prisma.workRecord.update({ where: { id: params.id }, data: { ...rest, coreJobStartDate: startDate, coreJobEndDate: endDate } });
+    if ((isUnitCoordinatorDay || isAssistantCoordinatorDay) && record.performer.currentGrade?.key !== "KEY_STUNT_PERFORMER") {
+      return forbidden("Unit Coordinator / Assistant Coordinator days are only available to Key Stunt Performers.");
+    }
+    // Mutually exclusive — whichever this request explicitly sets true wins and clears the other.
+    const coordinatorFields: { isUnitCoordinatorDay?: boolean; isAssistantCoordinatorDay?: boolean } = {};
+    if (isUnitCoordinatorDay !== undefined) coordinatorFields.isUnitCoordinatorDay = isUnitCoordinatorDay;
+    if (isAssistantCoordinatorDay !== undefined) coordinatorFields.isAssistantCoordinatorDay = isAssistantCoordinatorDay;
+    if (isUnitCoordinatorDay === true) coordinatorFields.isAssistantCoordinatorDay = false;
+    if (isAssistantCoordinatorDay === true) coordinatorFields.isUnitCoordinatorDay = false;
+
+    await prisma.workRecord.update({
+      where: { id: params.id },
+      data: { ...rest, coreJobStartDate: startDate, coreJobEndDate: endDate, ...coordinatorFields },
+    });
     return ok({ success: true });
   } catch (err) {
     return serverError(err);
   }
 }
 
-// DELETE /api/work-records/:id — permanently remove an Ongoing production the performer no
-// longer wants. Restricted to ONGOING (same as edit) so nothing that's ever been through
-// Full Member or committee review can be deleted, preserving the audit trail spec §27 requires.
+// DELETE /api/work-records/:id — permanently remove a production the performer no longer wants.
+// Restricted to ONGOING (same as edit), so nothing that's been through normal Full Member or
+// committee review can be deleted, preserving the audit trail spec §27 requires — EXCEPT an
+// approved Solo/Self-Coordinated submission, which the performer self-authored and self-approved
+// in the first place, so they're allowed to retract it themselves even after approval. Progress
+// is computed live from the DB (lib/progress.ts), so deleting it automatically deducts its days
+// and points — no separate bookkeeping needed.
 export async function DELETE(req: NextRequest, { params: __params }: { params: Promise<{ id: string }> }) {
   const params = await __params;
   try {
@@ -161,13 +186,15 @@ export async function DELETE(req: NextRequest, { params: __params }: { params: P
     const record = await prisma.workRecord.findUnique({ where: { id: params.id } });
     if (!record) return notFound();
     if (record.performerId !== session.id) return forbidden();
-    if (record.status !== "ONGOING") return forbidden("Only Ongoing records can be deleted.");
+    const deletable = record.status === "ONGOING" || (record.status === "APPROVED" && record.isSoloSubmission);
+    if (!deletable) return forbidden("Only Ongoing records, or your own approved Solo/Self-Coordinated records, can be deleted.");
 
     await prisma.$transaction([
       prisma.workDate.deleteMany({ where: { workRecordId: record.id } }),
       prisma.identifiable.deleteMany({ where: { workRecordId: record.id } }),
       prisma.evidenceDocument.deleteMany({ where: { workRecordId: record.id } }),
       prisma.workRecordPerformerLink.deleteMany({ where: { workRecordId: record.id } }),
+      prisma.workApproval.deleteMany({ where: { workRecordId: record.id } }),
       prisma.workRecord.delete({ where: { id: record.id } }),
     ]);
 

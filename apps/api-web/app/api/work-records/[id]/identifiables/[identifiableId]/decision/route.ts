@@ -7,6 +7,7 @@ import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "
 const schema = z.object({
   action: z.enum(["approve", "edit", "reject"]),
   verifiedDescription: z.string().min(1).optional(),
+  selfCoordinated: z.boolean().optional(),
 });
 
 // PATCH /api/work-records/:id/identifiables/:identifiableId/decision — Full Member
@@ -37,11 +38,14 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
     } else {
       // "approve" and "edit" both finalize as APPROVED — original wording is preserved in
       // performerDescription, the FM's (possibly corrected) wording goes in verifiedDescription.
+      // selfCoordinated, if the performer claimed it, can be unchecked by the FM here — only an
+      // FM-approved identifiable with this still true counts toward the points system.
       await prisma.identifiable.update({
         where: { id: params.identifiableId },
         data: {
           status: "APPROVED",
           verifiedDescription: body.data.verifiedDescription ?? identifiable.performerDescription,
+          selfCoordinated: body.data.selfCoordinated ?? identifiable.selfCoordinated,
           reviewedAt: new Date(),
         },
       });
