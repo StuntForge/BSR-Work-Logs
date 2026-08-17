@@ -69,10 +69,11 @@ export default function ProductionDetailScreen() {
   const [error, setError] = useState<string | null>(null);
 
   // Calendar taps only ever touch this local state — nothing is sent to the server until the
-  // performer explicitly saves via the header tick, which diffs this against record.workDates.
+  // performer navigates back, which saves in the background against record.workDates.
   const [localDates, setLocalDates] = useState<WorkDate[]>([]);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
     setRecord(data.record);
     setJobDescription(data.record.jobDescription ?? "");
@@ -88,6 +89,14 @@ export default function ProductionDetailScreen() {
       load();
     }, [load])
   );
+
+  // useFocusEffect alone isn't reliable for a same-route replace — navigating from one
+  // ProductionDetail (e.g. a continuation source) straight to another ProductionDetail with a
+  // new id doesn't always fire a fresh focus event, which left stale record/localDates in
+  // place. This guarantees a reload any time the id itself changes.
+  useEffect(() => {
+    load();
+  }, [id]);
 
   useEffect(() => {
     apiFetch<{ categories: AreaCategory[] }>("/api/area-categories").then((d) => setCategories(d.categories));
@@ -161,11 +170,26 @@ export default function ProductionDetailScreen() {
     }
   }
 
-  function handleBack() {
-    if (isOwnerOngoing) {
-      persistChanges().catch(() => {});
+  async function handleBack() {
+    if (!isOwnerOngoing) {
+      navigation.goBack();
+      return;
     }
-    navigation.goBack();
+    setSaving(true);
+    try {
+      await persistChanges();
+      navigation.goBack();
+    } catch (err: any) {
+      setSaving(false);
+      Alert.alert(
+        "Couldn't save your changes",
+        err.message || "Something went wrong saving this production. Check your connection and try again.",
+        [
+          { text: "Discard changes", style: "destructive", onPress: () => navigation.goBack() },
+          { text: "Try again", style: "cancel" },
+        ]
+      );
+    }
   }
 
   function confirmDelete() {
