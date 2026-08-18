@@ -99,7 +99,13 @@ export default function HomeScreen() {
 
   const metCount = data.requirements.filter((r) => r.met).length;
   const totalCount = data.requirements.length;
-  const overallPercent = totalCount > 0 ? Math.round(data.requirements.reduce((sum, r) => sum + Math.min(100, (r.approvedValue / Math.max(r.targetValue, 1)) * 100), 0) / totalCount) : 0;
+  // A met requirement always contributes 100%, even a composite (OR-logic or capped) one whose
+  // raw approvedValue/targetValue ratio wouldn't otherwise reach 100 — e.g. Solo/Core Team met
+  // via 2 core-team jobs still has approvedValue (solo days) at 0, which isn't "12% done".
+  const overallPercent =
+    totalCount > 0
+      ? Math.round(data.requirements.reduce((sum, r) => sum + (r.met ? 100 : Math.min(100, (r.approvedValue / Math.max(r.targetValue, 1)) * 100)), 0) / totalCount)
+      : 0;
 
   const timeReq = data.requirements.find((r) => r.type === "MIN_TIME_AT_GRADE");
   // Health & Safety always renders last, regardless of backend order.
@@ -166,10 +172,12 @@ export default function HomeScreen() {
           const meta = META[req.type] ?? { label: req.type, tone: "teal" as const, ring: colors.teal };
 
           if (req.type === "HEALTH_SAFETY") {
+            // A boolean gate, not a number to track — always state the level required, and only
+            // ever tick the box once the committee-set level meets or exceeds it.
             return (
               <Card key={req.type} style={styles.reqCard}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={styles.hsLabel}>Health and Safety Level: {req.approvedValue}</Text>
+                  <Text style={styles.hsLabel}>Health and Safety Level {req.targetValue} Required</Text>
                   <View style={[styles.hsCheckbox, req.met && styles.hsCheckboxMet]}>{req.met && <IconCheck size={20} color="#fff" />}</View>
                 </View>
               </Card>

@@ -532,7 +532,6 @@ export default function ProductionDetailScreen() {
       await persistChanges();
       await apiFetch(`/api/work-records/${id}/submit-solo`, { method: "POST" });
       navigation.navigate("Main", { screen: "Work" });
-      Alert.alert("Approved", "Your Solo/Self-Coordinated work record has been instantly approved.");
     } catch (err: any) {
       setError(err.message);
       setSubmittingSolo(false);
