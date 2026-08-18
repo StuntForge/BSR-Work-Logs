@@ -6,7 +6,7 @@ import { apiFetch } from "../api/client";
 import { Card, Button, Badge, IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
 import { KeyboardAvoider } from "../components/KeyboardAvoider";
-import { IconCalendar, IconDocument, IconIdCard, IconScale, IconCheckCircle, IconXCircle, IconPencil } from "../components/Icons";
+import { IconCalendar, IconIdCard, IconScale, IconCheckCircle, IconXCircle, IconPencil } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
 
@@ -196,16 +196,6 @@ export default function ReviewScreen() {
               <Text style={styles.muted}>Tap a claimed (green) date to reject it. Rejected dates turn red.</Text>
             </View>
           )}
-        </Card>
-
-        <Card style={styles.card}>
-          <SectionHeader icon={<IconDocument size={17} color={colors.tealDark} />} label="CONTRACT / EVIDENCE" />
-          {record.evidenceDocuments.length === 0 && <Text style={styles.muted}>None uploaded.</Text>}
-          {record.evidenceDocuments.map((doc) => (
-            <Text key={doc.id} style={{ marginTop: 4 }}>
-              {doc.fileName}
-            </Text>
-          ))}
         </Card>
 
         {!record.isUnitCoordinatorDay && !record.isAssistantCoordinatorDay && (

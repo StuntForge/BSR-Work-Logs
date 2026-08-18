@@ -17,6 +17,8 @@ interface WorkRecordSummary {
   createdAt: string;
   isQualifyingCoreJob: boolean;
   isSoloSubmission: boolean;
+  isUnitCoordinatorDay: boolean;
+  isAssistantCoordinatorDay: boolean;
 }
 
 const FILTERS: { key: string; label: string; icon: (c: string) => React.ReactNode; tone: "teal" | "amber" | "green" | "red" }[] = [
@@ -153,6 +155,8 @@ export default function WorkListScreen() {
                 <Badge label={item.status} tone={STATUS_TONE[item.status] as any} />
                 {item.isQualifyingCoreJob && <Badge label="Core Team" tone="teal" />}
                 {item.isSoloSubmission && <Badge label="Solo" tone="amber" />}
+                {item.isUnitCoordinatorDay && <Badge label="Unit Coordinator" tone="blue" />}
+                {item.isAssistantCoordinatorDay && <Badge label="Assistant Coordinator" tone="purple" />}
               </View>
               <View style={styles.metaRow}>
                 <IconCalendar size={13} color={colors.textMuted} />

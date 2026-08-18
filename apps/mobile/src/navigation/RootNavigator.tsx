@@ -43,11 +43,13 @@ function MainTabs() {
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarIcon: ({ color, size }) => <IconHome color={color} size={size} /> }} />
-      <Tab.Screen
-        name="Work"
-        component={WorkListScreen}
-        options={{ tabBarLabel: "Work Records", tabBarIcon: ({ color, size }) => <IconBriefcase color={color} size={size} /> }}
-      />
+      {!user?.isFullMember && (
+        <Tab.Screen
+          name="Work"
+          component={WorkListScreen}
+          options={{ tabBarLabel: "Work Records", tabBarIcon: ({ color, size }) => <IconBriefcase color={color} size={size} /> }}
+        />
+      )}
       {user?.isFullMember && (
         <Tab.Screen
           name="Approvals"

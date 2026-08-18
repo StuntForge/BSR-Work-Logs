@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
         createdAt: r.createdAt,
         isQualifyingCoreJob: isQualifyingCoreJob(r.coreJobStartDate, r.coreJobEndDate),
         isSoloSubmission: r.isSoloSubmission,
+        isUnitCoordinatorDay: r.isUnitCoordinatorDay,
+        isAssistantCoordinatorDay: r.isAssistantCoordinatorDay,
       })),
     });
   } catch (err) {

@@ -50,6 +50,8 @@ const TONES = {
   amber: { bg: colors.amberLight, fg: colors.amber },
   red: { bg: colors.redLight, fg: colors.red },
   gray: { bg: "#eef1f1", fg: colors.textMuted },
+  blue: { bg: colors.blueLight, fg: colors.blue },
+  purple: { bg: colors.purpleLight, fg: colors.purple },
 } as const;
 
 export function Badge({ label, tone = "gray" }: { label: string; tone?: keyof typeof TONES }) {

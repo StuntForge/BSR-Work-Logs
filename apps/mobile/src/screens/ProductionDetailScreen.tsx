@@ -158,6 +158,25 @@ export default function ProductionDetailScreen() {
     }
   }
 
+  // Solo/Self-Coordinated means NO Coordinator was present at all that day — that's incompatible
+  // with an identifiable individually marked self-coordinated, which implies a Coordinator WAS
+  // present for the rest of the job. Catch the contradiction before it's set, since the two can
+  // otherwise silently double-count (2pts for the Solo day, plus 1pt for the identifiable).
+  function handleSoloToggle(value: boolean) {
+    if (value && localIdentifiables.some((i) => i.selfCoordinated)) {
+      Alert.alert(
+        "Solo/Self-Coordinated day?",
+        "This option is ONLY for a day when there wasn't a Coordinator present at all. For a self-coordinated identifiable where a Coordinator WAS present, please write their name in the box below instead and send it to them for approval.",
+        [
+          { text: "Back", style: "cancel" },
+          { text: "Confirm — No Coordinator Present", onPress: () => setIsSoloSubmission(true) },
+        ]
+      );
+      return;
+    }
+    setIsSoloSubmission(value);
+  }
+
   // Calendar taps, identifiables, and evidence picks all only touch local state — nothing is
   // sent to the server until the performer navigates back, which saves everything together
   // against the record as last loaded.
@@ -584,6 +603,8 @@ export default function ProductionDetailScreen() {
           <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
             {record.isQualifyingCoreJob && <Badge label="Core Team" tone="teal" />}
             {record.isSoloSubmission && <Badge label="Solo" tone="amber" />}
+            {record.isUnitCoordinatorDay && <Badge label="Unit Coordinator" tone="blue" />}
+            {record.isAssistantCoordinatorDay && <Badge label="Assistant Coordinator" tone="purple" />}
             <Badge
               label={record.status}
               tone={record.status === "APPROVED" ? "green" : record.status === "SUBMITTED" ? "amber" : record.status === "REJECTED" ? "red" : "gray"}
@@ -769,7 +790,7 @@ export default function ProductionDetailScreen() {
             {canGoSolo && (
               <View style={[styles.row, { justifyContent: "space-between", marginBottom: 10 }]}>
                 <Text style={styles.label}>Solo/Self Coordinated?</Text>
-                <Switch value={isSoloSubmission} onValueChange={setIsSoloSubmission} />
+                <Switch value={isSoloSubmission} onValueChange={handleSoloToggle} />
               </View>
             )}
 

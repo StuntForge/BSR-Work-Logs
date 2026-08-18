@@ -347,19 +347,31 @@ function PointsCard({ req, pb }: { req: Requirement; pb: PointsBreakdown }) {
       <View style={pointsStyles.group}>
         <Text style={pointsStyles.groupTitle}>SOLO DAY & UNIT COORDINATOR DAY</Text>
         <View style={pointsStyles.itemRow}>
-          <Text style={pointsStyles.itemLabel}>Solo Day - Own Job (2 pts each)</Text>
+          <View style={pointsStyles.itemLabelRow}>
+            <Dot color={colors.green} />
+            <Text style={pointsStyles.itemLabel}>Solo Day - Own Job (2 pts each)</Text>
+          </View>
           <Text style={pointsStyles.itemValue}>
             {pb.soloDays} × 2 = {pb.soloPoints}pts
           </Text>
         </View>
         <View style={pointsStyles.itemRow}>
-          <Text style={pointsStyles.itemLabel}>Unit Coordinator Day (1 pt each)</Text>
+          <View style={pointsStyles.itemLabelRow}>
+            <Dot color={colors.blue} />
+            <Text style={pointsStyles.itemLabel}>Unit Coordinator Day (1 pt each)</Text>
+          </View>
           <Text style={pointsStyles.itemValue}>
             {pb.unitCoordinatorDays} × 1 = {pb.unitCoordinatorPoints}pts
           </Text>
         </View>
         <View style={{ marginTop: 8 }}>
-          <ProgressBar value={Math.min(pb.groupABPoints, 20)} max={20} color={colors.green} trackColor={colors.border} />
+          <SegmentedProgressBar
+            segments={[
+              { value: pb.soloPoints, color: colors.green },
+              { value: pb.unitCoordinatorPoints, color: colors.blue },
+            ]}
+            max={20}
+          />
         </View>
         <Text style={pointsStyles.groupNote}>
           Minimum 20 points must come from Solo Day + Unit Coordinator Day combined — {pb.groupABPoints} earned so far
@@ -370,19 +382,31 @@ function PointsCard({ req, pb }: { req: Requirement; pb: PointsBreakdown }) {
       <View style={pointsStyles.group}>
         <Text style={pointsStyles.groupTitle}>SELF-COORDINATING & ASSISTANT COORDINATOR DAY</Text>
         <View style={pointsStyles.itemRow}>
-          <Text style={pointsStyles.itemLabel}>Self-Coordinating on another Coordinator's job (1 pt each)</Text>
+          <View style={pointsStyles.itemLabelRow}>
+            <Dot color={colors.purple} />
+            <Text style={pointsStyles.itemLabel}>Self-Coordinating on another Coordinator's job (1 pt each)</Text>
+          </View>
           <Text style={pointsStyles.itemValue}>
             {pb.selfCoordinatingCount} × 1 = {pb.selfCoordinatingPoints}pts
           </Text>
         </View>
         <View style={pointsStyles.itemRow}>
-          <Text style={pointsStyles.itemLabel}>Assistant Coordinator Day (1 pt each)</Text>
+          <View style={pointsStyles.itemLabelRow}>
+            <Dot color={colors.amber} />
+            <Text style={pointsStyles.itemLabel}>Assistant Coordinator Day (1 pt each)</Text>
+          </View>
           <Text style={pointsStyles.itemValue}>
             {pb.assistantCoordinatorDays} × 1 = {pb.assistantCoordinatorPoints}pts
           </Text>
         </View>
         <View style={{ marginTop: 8 }}>
-          <ProgressBar value={pb.groupCDCounted} max={60} color={colors.purple} trackColor={colors.border} />
+          <SegmentedProgressBar
+            segments={[
+              { value: pb.selfCoordinatingPoints, color: colors.purple },
+              { value: pb.assistantCoordinatorPoints, color: colors.amber },
+            ]}
+            max={60}
+          />
         </View>
         <Text style={pointsStyles.groupNote}>
           Capped at 60 points towards your 80-point goal — {pb.groupCDPoints} earned, {pb.groupCDCounted} counted
@@ -392,6 +416,32 @@ function PointsCard({ req, pb }: { req: Requirement; pb: PointsBreakdown }) {
     </Card>
   );
 }
+
+// A progress bar made of adjacent colored segments — e.g. Solo Day (green) + Unit Coordinator
+// Day (blue) filling the same "min 20 points" bar, so the breakdown is visible at a glance
+// instead of just a single flat color. If the segments' total exceeds max, they're scaled down
+// proportionally so the bar never overflows while keeping the same relative split.
+function SegmentedProgressBar({ segments, max, trackColor = colors.border }: { segments: { value: number; color: string }[]; max: number; trackColor?: string }) {
+  const total = segments.reduce((s, seg) => s + seg.value, 0);
+  const displayTotal = Math.min(total, max);
+  const scale = total > 0 ? displayTotal / total : 0;
+  return (
+    <View style={[segStyles.track, { backgroundColor: trackColor }]}>
+      {segments.map((seg, i) => {
+        const widthPercent = max > 0 ? ((seg.value * scale) / max) * 100 : 0;
+        return seg.value > 0 ? <View key={i} style={{ width: `${widthPercent}%`, backgroundColor: seg.color }} /> : null;
+      })}
+    </View>
+  );
+}
+
+function Dot({ color }: { color: string }) {
+  return <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginRight: 6 }} />;
+}
+
+const segStyles = StyleSheet.create({
+  track: { height: 8, borderRadius: 4, overflow: "hidden", flexDirection: "row" },
+});
 
 const soloStyles = StyleSheet.create({
   box: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12 },
@@ -411,7 +461,8 @@ const pointsStyles = StyleSheet.create({
   group: { marginTop: 16 },
   groupTitle: { fontSize: 11, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.4, marginBottom: 8 },
   itemRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
-  itemLabel: { fontSize: 12, color: colors.text, flex: 1, marginRight: 8 },
+  itemLabelRow: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
+  itemLabel: { fontSize: 12, color: colors.text, flex: 1 },
   itemValue: { fontSize: 12, fontWeight: "700", color: colors.textMuted },
   groupNote: { fontSize: 11, color: colors.textMuted, marginTop: 8, lineHeight: 16 },
 });
