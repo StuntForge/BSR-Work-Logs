@@ -28,8 +28,46 @@ interface ReviewData {
     fromGrade: { key: string; label: string } | null;
     toGrade: { key: string; label: string } | null;
   };
+  totalApprovedDays: number;
   productions: Production[];
+  soloSubmissions: Production[];
+  coreTeamJobs: Production[];
   consolidatedIdentifiables: ConsolidatedIdentifiable[];
+}
+
+function ProductionTable({ rows, showApprovedBy, emptyText }: { rows: Production[]; showApprovedBy: boolean; emptyText: string }) {
+  if (rows.length === 0) return <p className="muted">{emptyText}</p>;
+  return (
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Production</th>
+          <th>Days</th>
+          <th>Identifiables</th>
+          {showApprovedBy && <th>Approved by</th>}
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr key={p.workRecordId}>
+            <td>{p.productionName}</td>
+            <td>{p.approvedDays}</td>
+            <td>{p.identifiableCount}</td>
+            {showApprovedBy && <td>{p.fullMember?.name ?? "—"}</td>}
+            <td>
+              {p.evidenceDocuments.length === 0 && <span className="muted">None</span>}
+              {p.evidenceDocuments.map((doc) => (
+                <a key={doc.id} href={`/api/work-records/${p.workRecordId}/evidence/${doc.id}`} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                  {doc.fileName}
+                </a>
+              ))}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 export function ReviewClient({ id }: { id: string }) {
@@ -64,8 +102,9 @@ export function ReviewClient({ id }: { id: string }) {
 
   if (!data) return <p className="muted">Loading...</p>;
 
-  const totalDays = data.productions.reduce((s, p) => s + p.approvedDays, 0);
+  const totalDays = data.totalApprovedDays;
   const totalIdentifiables = data.consolidatedIdentifiables.length;
+  const isSeniorApplicant = data.application.fromGrade?.key === "SENIOR_STUNT_PERFORMER";
 
   return (
     <div className="stack">
@@ -94,36 +133,22 @@ export function ReviewClient({ id }: { id: string }) {
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Production list</h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Production</th>
-              <th>Days</th>
-              <th>Identifiables</th>
-              <th>Approved by</th>
-              <th>Evidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.productions.map((p) => (
-              <tr key={p.workRecordId}>
-                <td>{p.productionName}</td>
-                <td>{p.approvedDays}</td>
-                <td>{p.identifiableCount}</td>
-                <td>{p.fullMember?.name ?? "—"}</td>
-                <td>
-                  {p.evidenceDocuments.length === 0 && <span className="muted">None</span>}
-                  {p.evidenceDocuments.map((doc) => (
-                    <a key={doc.id} href={`/api/work-records/${p.workRecordId}/evidence/${doc.id}`} target="_blank" rel="noreferrer" style={{ display: "block" }}>
-                      {doc.fileName}
-                    </a>
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ProductionTable rows={data.productions} showApprovedBy emptyText="No productions in this application." />
       </div>
+
+      {isSeniorApplicant && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>Solo/Self-Coordinated</h2>
+          <ProductionTable rows={data.soloSubmissions} showApprovedBy={false} emptyText="No Solo/Self-Coordinated submissions." />
+        </div>
+      )}
+
+      {isSeniorApplicant && (
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>Core Teams</h2>
+          <ProductionTable rows={data.coreTeamJobs} showApprovedBy emptyText="No Core Team jobs." />
+        </div>
+      )}
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Consolidated identifiables</h2>

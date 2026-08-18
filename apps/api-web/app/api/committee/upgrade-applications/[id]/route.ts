@@ -35,7 +35,14 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
     const fromGrade = await prisma.grade.findUnique({ where: { id: application.fromGradeId } });
     const toGrade = await prisma.grade.findUnique({ where: { id: application.toGradeId } });
 
-    const productions = application.evidenceLinks.map((link) => {
+    // Senior -> Key is the only route with Solo/Self-Coordinated and Core Team jobs (they feed
+    // the SOLO_OR_CORE_TEAM composite requirement) — those records get their own headings on this
+    // page instead of cluttering the general production list, matching committee's mental model.
+    const isSeniorApplicant = fromGrade?.key === "SENIOR_STUNT_PERFORMER";
+
+    const evidenceLinks = application.evidenceLinks;
+
+    const toProductionRow = (link: (typeof evidenceLinks)[number]) => {
       const wr = link.workRecord;
       return {
         workRecordId: wr.id,
@@ -45,7 +52,15 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         fullMember: wr.fullMember,
         evidenceDocuments: wr.evidenceDocuments,
       };
-    });
+    };
+
+    const productions = evidenceLinks
+      .filter((link) => !isSeniorApplicant || (!link.workRecord.isSoloSubmission && !link.workRecord.isCoreJob))
+      .map(toProductionRow);
+
+    const soloSubmissions = isSeniorApplicant ? evidenceLinks.filter((link) => link.workRecord.isSoloSubmission).map(toProductionRow) : [];
+
+    const coreTeamJobs = isSeniorApplicant ? evidenceLinks.filter((link) => link.workRecord.isCoreJob).map(toProductionRow) : [];
 
     const consolidatedIdentifiables = application.evidenceLinks.flatMap((link) =>
       link.workRecord.identifiables.map((i) => ({
@@ -56,6 +71,10 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         approvedBy: link.workRecord.fullMember?.name ?? null,
       }))
     );
+
+    // Computed from every contributing record, not just `productions` — Solo/Core Team days
+    // still count toward the total even though they're broken out into their own sections.
+    const totalApprovedDays = application.evidenceLinks.reduce((sum, link) => sum + link.approvedDaysSnapshot, 0);
 
     return ok({
       application: {
@@ -68,7 +87,10 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         fromGrade: fromGrade ? { key: fromGrade.key, label: fromGrade.label } : null,
         toGrade: toGrade ? { key: toGrade.key, label: toGrade.label } : null,
       },
+      totalApprovedDays,
       productions,
+      soloSubmissions,
+      coreTeamJobs,
       consolidatedIdentifiables,
     });
   } catch (err) {
