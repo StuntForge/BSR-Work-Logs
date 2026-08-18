@@ -103,7 +103,7 @@ export default function ProductionDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const id: string = route.params.id;
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const [record, setRecord] = useState<RecordDetail | null>(null);
   const [categories, setCategories] = useState<AreaCategory[]>([]);
@@ -167,7 +167,10 @@ export default function ProductionDetailScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`);
+    // Also refreshes the cached session grade — without this, a grade change made mid-session
+    // (e.g. a committee-approved upgrade) wouldn't unlock grade-gated fields like the Key Stunt
+    // Performer Unit/Assistant Coordinator toggles until the app was fully restarted or re-logged in.
+    const [data] = await Promise.all([apiFetch<{ record: RecordDetail }>(`/api/work-records/${id}`), refreshUser()]);
     setRecord(data.record);
     setJobDescription(data.record.jobDescription ?? "");
     setLocations(data.record.locations ?? []);
@@ -194,7 +197,7 @@ export default function ProductionDetailScreen() {
     setIsUnitCoordinatorDayState(!!data.record.isUnitCoordinatorDay);
     setIsAssistantCoordinatorDayState(!!data.record.isAssistantCoordinatorDay);
     setLoading(false);
-  }, [id]);
+  }, [id, refreshUser]);
 
   useFocusEffect(
     useCallback(() => {

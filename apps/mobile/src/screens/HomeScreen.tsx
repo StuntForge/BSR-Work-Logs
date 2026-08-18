@@ -7,6 +7,7 @@ import { Header } from "../components/Header";
 import { ProgressRing } from "../components/ProgressRing";
 import { IconAward, IconCalendar, IconIdCard, IconCheck } from "../components/Icons";
 import { colors } from "../theme";
+import { useAuth } from "../auth/AuthContext";
 
 interface PointsBreakdown {
   soloDays: number;
@@ -52,6 +53,7 @@ function addDays(iso: string, days: number) {
 }
 
 export default function HomeScreen() {
+  const { refreshUser } = useAuth();
   const [data, setData] = useState<HomeData | null>(null);
   const [pending, setPending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,10 +64,14 @@ export default function HomeScreen() {
     const [d, apps] = await Promise.all([
       apiFetch<HomeData>("/api/home"),
       apiFetch<{ applications: { status: string }[] }>("/api/upgrade-applications"),
+      // The session's cached currentGradeKey (from login) goes stale the moment a committee
+      // approves an upgrade mid-session — refresh it on every Home visit so grade-gated features
+      // (e.g. Key Stunt Performer's Unit/Assistant Coordinator toggles) unlock without a re-login.
+      refreshUser(),
     ]);
     setData(d);
     setPending(apps.applications.some((a) => a.status === "PENDING"));
-  }, []);
+  }, [refreshUser]);
 
   useFocusEffect(
     useCallback(() => {

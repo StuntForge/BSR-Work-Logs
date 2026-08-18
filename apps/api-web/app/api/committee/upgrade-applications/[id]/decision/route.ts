@@ -64,9 +64,11 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
         // this system existed (spec §32 territory, see the User model comment).
         await tx.user.update({ where: { id: application.userId }, data: { currentGradeId: application.toGradeId, lastUpgradedAt: decidedAt } });
 
-        // 5. Move approved productions from that upgrade period into Archive.
+        // 5. Move every production from that closed grade period into Archive, regardless of
+        // status (Ongoing/Submitted/Rejected too, not just Approved) — Qualifying Work should be
+        // completely empty at the start of a new grade period.
         await tx.workRecord.updateMany({
-          where: { gradeHistoryId: openPeriod.id, performerId: application.userId, status: "APPROVED" },
+          where: { gradeHistoryId: openPeriod.id, performerId: application.userId },
           data: { status: "ARCHIVED" },
         });
 
