@@ -53,14 +53,18 @@ function addDays(iso: string, days: number) {
 
 export default function HomeScreen() {
   const [data, setData] = useState<HomeData | null>(null);
+  const [pending, setPending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
 
   const load = useCallback(async () => {
-    const d = await apiFetch<HomeData>("/api/home");
+    const [d, apps] = await Promise.all([
+      apiFetch<HomeData>("/api/home"),
+      apiFetch<{ applications: { status: string }[] }>("/api/upgrade-applications"),
+    ]);
     setData(d);
+    setPending(apps.applications.some((a) => a.status === "PENDING"));
   }, []);
 
   useFocusEffect(
@@ -80,8 +84,7 @@ export default function HomeScreen() {
     setSubmitError(null);
     try {
       await apiFetch("/api/upgrade-applications", { method: "POST" });
-      setSubmitted(true);
-      load();
+      await load();
     } catch (err: any) {
       setSubmitError(err.message);
     } finally {
@@ -225,16 +228,17 @@ export default function HomeScreen() {
           </Card>
         )}
 
-        {data.eligibleForUpgrade && !submitted && (
-          <View style={{ marginTop: 8 }}>
-            <Button title={submitting ? "Submitting..." : "Submit for Upgrade"} onPress={submitForUpgrade} disabled={submitting} loading={submitting} />
-            {submitError && <Text style={{ color: colors.red, marginTop: 8 }}>{submitError}</Text>}
-          </View>
-        )}
-        {submitted && (
-          <Card style={{ marginTop: 8, backgroundColor: colors.tealLight }}>
-            <Text>Your upgrade application has been submitted to the committee.</Text>
+        {pending ? (
+          <Card style={{ marginTop: 8, backgroundColor: colors.greenLight }}>
+            <Text style={{ color: colors.green, fontWeight: "700" }}>Your upgrade application has been submitted — the committee are reviewing it.</Text>
           </Card>
+        ) : (
+          data.eligibleForUpgrade && (
+            <View style={{ marginTop: 8 }}>
+              <Button title={submitting ? "Submitting..." : "Submit for Upgrade"} onPress={submitForUpgrade} disabled={submitting} loading={submitting} />
+              {submitError && <Text style={{ color: colors.red, marginTop: 8 }}>{submitError}</Text>}
+            </View>
+          )
         )}
       </ScrollView>
     </View>
