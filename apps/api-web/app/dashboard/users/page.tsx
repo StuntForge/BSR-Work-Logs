@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client-api";
 import { GRADE_KEYS, GRADE_LABELS } from "@bsr/shared";
-import { IconSearch, IconFilter, IconChevronDown, IconKey, IconUserOff } from "../Icons";
+import { IconSearch, IconKey, IconUserOff, IconClipboardList } from "../Icons";
 
 interface Member {
   id: string;
+  firstName: string;
+  surname: string;
   name: string;
   email: string;
   active: boolean;
@@ -16,24 +19,28 @@ interface Member {
   lastUpgradedAt: string | null;
 }
 
+type SortField = "firstName" | "surname" | "grade" | "status" | "dateJoined";
+type SortDirection = "asc" | "desc";
+
+const GRADE_RANK: Record<string, number> = Object.fromEntries(GRADE_KEYS.map((k, i) => [k, i]));
+
 function toDateInputValue(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "";
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+function initials(firstName: string, surname: string) {
+  return ((firstName[0] ?? "") + (surname[0] ?? "")).toUpperCase();
 }
 
 export default function UsersPage() {
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [query, setQuery] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({ field: "surname", direction: "asc" });
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,14 +55,6 @@ export default function UsersPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilterMenu(false);
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
 
   async function toggleActive(m: Member) {
     await apiFetch(`/api/committee/members/${m.id}`, { method: "PATCH", body: JSON.stringify({ active: !m.active }) });
@@ -77,7 +76,38 @@ export default function UsersPage() {
     load();
   }
 
-  const filterLabel = gradeFilter ? GRADE_LABELS[gradeFilter as keyof typeof GRADE_LABELS] : "All";
+  function toggleSort(field: SortField) {
+    setSort((s) => (s.field === field ? { field, direction: s.direction === "asc" ? "desc" : "asc" } : { field, direction: "asc" }));
+  }
+
+  function SortHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
+    const active = sort.field === field;
+    return (
+      <th className="sortable-th" onClick={() => toggleSort(field)}>
+        {children} <span className="sort-arrow">{active ? (sort.direction === "asc" ? "▲" : "▼") : ""}</span>
+      </th>
+    );
+  }
+
+  const sortedMembers = useMemo(() => {
+    const dir = sort.direction === "asc" ? 1 : -1;
+    return [...members].sort((a, b) => {
+      switch (sort.field) {
+        case "firstName":
+          return a.firstName.localeCompare(b.firstName) * dir;
+        case "surname":
+          return a.surname.localeCompare(b.surname) * dir;
+        case "grade":
+          return ((GRADE_RANK[a.currentGrade?.key ?? ""] ?? -1) - (GRADE_RANK[b.currentGrade?.key ?? ""] ?? -1)) * dir;
+        case "status":
+          return (Number(a.active) - Number(b.active)) * dir;
+        case "dateJoined":
+          return ((a.dateJoined ? new Date(a.dateJoined).getTime() : 0) - (b.dateJoined ? new Date(b.dateJoined).getTime() : 0)) * dir;
+        default:
+          return 0;
+      }
+    });
+  }, [members, sort]);
 
   return (
     <div>
@@ -110,39 +140,17 @@ export default function UsersPage() {
           <IconSearch />
           <input placeholder="Search by name, email or grade..." value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
+      </div>
 
-        <div className="filter-wrap" ref={filterRef}>
-          <button className="btn" onClick={() => setShowFilterMenu((s) => !s)}>
-            <IconFilter />
-            Filter{gradeFilter ? `: ${filterLabel}` : ""}
-            <IconChevronDown />
+      <div className="tabs">
+        <button className={`tab ${gradeFilter === null ? "active" : ""}`} onClick={() => setGradeFilter(null)}>
+          All
+        </button>
+        {GRADE_KEYS.map((k) => (
+          <button key={k} className={`tab ${gradeFilter === k ? "active" : ""}`} onClick={() => setGradeFilter(k)}>
+            {GRADE_LABELS[k]}
           </button>
-          {showFilterMenu && (
-            <div className="filter-menu">
-              <button
-                className={`filter-option${gradeFilter === null ? " active" : ""}`}
-                onClick={() => {
-                  setGradeFilter(null);
-                  setShowFilterMenu(false);
-                }}
-              >
-                All grades
-              </button>
-              {GRADE_KEYS.map((k) => (
-                <button
-                  key={k}
-                  className={`filter-option${gradeFilter === k ? " active" : ""}`}
-                  onClick={() => {
-                    setGradeFilter(k);
-                    setShowFilterMenu(false);
-                  }}
-                >
-                  {GRADE_LABELS[k]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        ))}
       </div>
 
       <div className="card">
@@ -152,25 +160,27 @@ export default function UsersPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Name</th>
+                <SortHeader field="firstName">First Name</SortHeader>
+                <SortHeader field="surname">Surname</SortHeader>
                 <th>Email</th>
-                <th>Grade</th>
-                <th>Status</th>
+                <SortHeader field="grade">Grade</SortHeader>
+                <SortHeader field="status">Status</SortHeader>
                 <th>H&amp;S Level</th>
-                <th>Date Joined</th>
+                <SortHeader field="dateJoined">Date Joined</SortHeader>
                 <th>Last Upgraded</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
+              {sortedMembers.map((m) => (
                 <tr key={m.id}>
                   <td>
                     <div className="name-cell">
-                      <span className="avatar">{initials(m.name)}</span>
-                      <strong>{m.name}</strong>
+                      <span className="avatar">{initials(m.firstName, m.surname)}</span>
+                      <strong>{m.firstName}</strong>
                     </div>
                   </td>
+                  <td>{m.surname}</td>
                   <td>{m.email}</td>
                   <td>{m.currentGrade?.label ?? "—"}</td>
                   <td>
@@ -208,13 +218,17 @@ export default function UsersPage() {
                   </td>
                   <td>
                     <div className="row">
-                      <button className="btn" onClick={() => resetPassword(m)}>
+                      <button className="btn btn-tinted-teal" onClick={() => resetPassword(m)}>
                         <IconKey />
                         Reset password
                       </button>
-                      <button className="btn" onClick={() => toggleActive(m)}>
+                      <button className={`btn ${m.active ? "btn-tinted-red" : "btn-tinted-teal"}`} onClick={() => toggleActive(m)}>
                         <IconUserOff />
                         {m.active ? "Deactivate" : "Reactivate"}
+                      </button>
+                      <button className="btn" onClick={() => router.push(`/dashboard/users/${m.id}/upgrade-history`)}>
+                        <IconClipboardList />
+                        Audit - View Previous Upgrades
                       </button>
                     </div>
                   </td>
@@ -222,7 +236,7 @@ export default function UsersPage() {
               ))}
               {members.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted">
+                  <td colSpan={9} className="muted">
                     No users found.
                   </td>
                 </tr>
@@ -247,11 +261,16 @@ export default function UsersPage() {
 }
 
 function CreateMemberModal({ onClose, onCreated }: { onClose: () => void; onCreated: (tempPassword: string, name: string) => void }) {
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [surname, setSurname] = useState("");
   const [email, setEmail] = useState("");
   const [gradeKey, setGradeKey] = useState<string>(GRADE_KEYS[0]);
+  const [dateJoined, setDateJoined] = useState("");
+  const [lastUpgradedAt, setLastUpgradedAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const isProbationary = gradeKey === "PROBATIONARY";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -260,9 +279,16 @@ function CreateMemberModal({ onClose, onCreated }: { onClose: () => void; onCrea
     try {
       const data = await apiFetch<{ tempPassword: string }>("/api/committee/members", {
         method: "POST",
-        body: JSON.stringify({ name, email, gradeKey }),
+        body: JSON.stringify({
+          firstName,
+          surname,
+          email,
+          gradeKey,
+          dateJoined: dateJoined || null,
+          lastUpgradedAt: !isProbationary && lastUpgradedAt ? lastUpgradedAt : null,
+        }),
       });
-      onCreated(data.tempPassword, name);
+      onCreated(data.tempPassword, `${firstName} ${surname}`);
     } catch (err: any) {
       setError(err.message);
       setSaving(false);
@@ -277,8 +303,12 @@ function CreateMemberModal({ onClose, onCreated }: { onClose: () => void; onCrea
       <form className="card stack" style={{ width: 380 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h2 style={{ margin: 0, color: "var(--bsr-teal-dark)" }}>New user account</h2>
         <div className="field">
-          <label className="label">Name</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          <label className="label">First name</label>
+          <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} required autoFocus />
+        </div>
+        <div className="field">
+          <label className="label">Surname</label>
+          <input className="input" value={surname} onChange={(e) => setSurname(e.target.value)} required />
         </div>
         <div className="field">
           <label className="label">Email</label>
@@ -294,6 +324,16 @@ function CreateMemberModal({ onClose, onCreated }: { onClose: () => void; onCrea
             ))}
           </select>
         </div>
+        <div className="field">
+          <label className="label">Date joined</label>
+          <input className="input" type="date" value={dateJoined} onChange={(e) => setDateJoined(e.target.value)} />
+        </div>
+        {!isProbationary && (
+          <div className="field">
+            <label className="label">Date of last upgrade</label>
+            <input className="input" type="date" value={lastUpgradedAt} onChange={(e) => setLastUpgradedAt(e.target.value)} />
+          </div>
+        )}
         {error && <div className="error-text">{error}</div>}
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="btn" onClick={onClose}>

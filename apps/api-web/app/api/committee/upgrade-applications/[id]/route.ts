@@ -148,6 +148,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         status: application.status,
         submittedAt: application.submittedAt,
         decidedAt: application.decidedAt,
+        decidedByName: application.decidedByName,
         decisionMessage: application.decisionMessage,
         member: application.user,
         fromGrade: fromGrade ? { key: fromGrade.key, label: fromGrade.label } : null,

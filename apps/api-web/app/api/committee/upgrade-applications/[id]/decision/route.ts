@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { isCommitteeSession } from "@/lib/committee";
 import { writeAudit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
+import { deleteEvidence } from "@/lib/blob";
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
 const schema = z.object({ decision: z.enum(["APPROVED", "REJECTED"]), message: z.string().optional() });
@@ -26,12 +27,17 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
       return badRequest("A reason is required when rejecting.");
     }
 
+    // Snapshotted alongside decidedById, same reasoning as AuditEvent.actorName — the committee
+    // member deciding this can be deleted years later, but the upgrade-history "stamp" showing
+    // who decided it must keep reading their name regardless.
+    const decidedByName = session.name;
+
     if (body.data.decision === "REJECTED") {
       // Reject: feedback only. Grade, approved work and progress are untouched — never reset
       // progress on a rejected upgrade (spec §21.1, §33).
       await prisma.upgradeApplication.update({
         where: { id: application.id },
-        data: { status: "REJECTED", decidedAt: new Date(), decidedById: session.id, decisionMessage: body.data.message },
+        data: { status: "REJECTED", decidedAt: new Date(), decidedById: session.id, decidedByName, decisionMessage: body.data.message },
       });
     } else {
       // Approve: 8-step transaction per spec §21.2.
@@ -46,7 +52,7 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
         // 1. Record committee approval + timestamp.
         await tx.upgradeApplication.update({
           where: { id: application.id },
-          data: { status: "APPROVED", decidedAt, decidedById: session.id, decisionMessage: body.data.message },
+          data: { status: "APPROVED", decidedAt, decidedById: session.id, decidedByName, decisionMessage: body.data.message },
         });
 
         // 2 & 3 & 4. Advance grade, append Grade History, new grade start date/time.
@@ -76,6 +82,27 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
         // always computed live from the new (empty) grade period, and RequirementDefinitions
         // for the new current grade's own next target are looked up dynamically (lib/progress.ts).
       });
+
+      // Evidence cleanup happens after the transaction commits, and is best-effort — the
+      // approval itself has already succeeded, so a blob-store hiccup here shouldn't turn into a
+      // failed request. The production/day/identifiable counts this application was frozen
+      // against (UpgradeApplicationEvidence) are untouched; only the underlying files go.
+      try {
+        const links = await prisma.upgradeApplicationEvidence.findMany({
+          where: { upgradeApplicationId: application.id },
+          select: { workRecordId: true },
+        });
+        const workRecordIds = links.map((l) => l.workRecordId);
+        if (workRecordIds.length > 0) {
+          const docs = await prisma.evidenceDocument.findMany({ where: { workRecordId: { in: workRecordIds } } });
+          if (docs.length > 0) {
+            await deleteEvidence(docs.map((d) => d.fileUrl));
+            await prisma.evidenceDocument.deleteMany({ where: { workRecordId: { in: workRecordIds } } });
+          }
+        }
+      } catch (err) {
+        console.error("Evidence cleanup failed for upgrade application", application.id, err);
+      }
     }
 
     if (!session.isAdmin) {

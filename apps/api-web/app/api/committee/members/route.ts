@@ -30,16 +30,23 @@ export async function GET(req: NextRequest) {
     });
 
     return ok({
-      members: users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        active: u.active,
-        currentGrade: u.currentGrade ? { key: u.currentGrade.key, label: u.currentGrade.label } : null,
-        healthSafetyLevel: u.qualifications[0]?.level ?? 0,
-        dateJoined: u.dateJoined,
-        lastUpgradedAt: u.lastUpgradedAt,
-      })),
+      members: users.map((u) => {
+        // Accounts created before firstName/surname existed only have `name` — split it on read
+        // rather than backfilling every historical row.
+        const [fallbackFirst, ...fallbackRest] = u.name.trim().split(/\s+/);
+        return {
+          id: u.id,
+          firstName: u.firstName ?? fallbackFirst ?? u.name,
+          surname: u.surname ?? (fallbackRest.length > 0 ? fallbackRest.join(" ") : ""),
+          name: u.name,
+          email: u.email,
+          active: u.active,
+          currentGrade: u.currentGrade ? { key: u.currentGrade.key, label: u.currentGrade.label } : null,
+          healthSafetyLevel: u.qualifications[0]?.level ?? 0,
+          dateJoined: u.dateJoined,
+          lastUpgradedAt: u.lastUpgradedAt,
+        };
+      }),
     });
   } catch (err) {
     return serverError(err);
@@ -47,9 +54,14 @@ export async function GET(req: NextRequest) {
 }
 
 const createSchema = z.object({
-  name: z.string().min(1),
+  firstName: z.string().min(1),
+  surname: z.string().min(1),
   email: z.string().email(),
   gradeKey: z.string().min(1),
+  dateJoined: z.string().nullable().optional(),
+  // Only meaningful when gradeKey isn't PROBATIONARY (the web form only shows the field then),
+  // but the API accepts it regardless rather than special-casing PROBATIONARY server-side too.
+  lastUpgradedAt: z.string().nullable().optional(),
 });
 
 // POST /api/committee/members — create a new BSR member account (spec §23). No public
@@ -62,23 +74,28 @@ export async function POST(req: NextRequest) {
     if (!isCommitteeSession(session)) return session ? forbidden() : unauthorized();
 
     const body = createSchema.safeParse(await req.json());
-    if (!body.success) return badRequest("Name, email and grade are required.");
+    if (!body.success) return badRequest("First name, surname, email and grade are required.");
 
     const grade = await prisma.grade.findUnique({ where: { key: body.data.gradeKey as any } });
     if (!grade) return badRequest("Invalid grade.");
 
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
+    const name = `${body.data.firstName.trim()} ${body.data.surname.trim()}`;
 
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
-          name: body.data.name,
+          name,
+          firstName: body.data.firstName.trim(),
+          surname: body.data.surname.trim(),
           email: body.data.email.toLowerCase(),
           passwordHash,
           currentGradeId: grade.id,
           isCommittee: false,
           mustChangePassword: true,
+          dateJoined: body.data.dateJoined ? new Date(body.data.dateJoined) : null,
+          lastUpgradedAt: body.data.lastUpgradedAt ? new Date(body.data.lastUpgradedAt) : null,
         },
       });
       await tx.gradeHistory.create({ data: { userId: created.id, gradeId: grade.id } });

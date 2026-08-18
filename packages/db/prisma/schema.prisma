@@ -84,6 +84,11 @@ model Grade {
 model User {
   id                 String    @id @default(cuid())
   name               String
+  // Split name for members created from this point on, so the Users list can show/sort them as
+  // separate columns. Nullable because accounts created before this field existed only have
+  // `name` — the API falls back to splitting that on read rather than backfilling every row.
+  firstName          String?
+  surname            String?
   email              String    @unique
   // Committee/admin web-portal login only — never used by the mobile app. Members sign in with
   // email; committee accounts sign in with username, and only via /api/auth/portal-login, which
@@ -356,6 +361,10 @@ model UpgradeApplication {
   decidedAt       DateTime?
   decidedById     String?
   decidedBy       User?                        @relation("UpgradeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  // Snapshotted at decision time, same reasoning as AuditEvent.actorName — the committee member
+  // who approved this can be deleted years later, but the upgrade-history "stamp" showing who
+  // approved it must keep reading their name regardless.
+  decidedByName   String?
   decisionMessage String?
 
   evidenceLinks       UpgradeApplicationEvidence[]

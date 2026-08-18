@@ -56,3 +56,50 @@ const styles = StyleSheet.create({
   centerLabel: { fontSize: 17, fontWeight: "800" },
   subLabel: { fontSize: 10, fontWeight: "600", color: colors.textMuted, marginTop: 1 },
 });
+
+// Two-tone ring — purely decorative (not literally proportional to the two values, since they
+// measure unrelated things), used behind the Full Member "Lifetime Impact" stat rows.
+export function DualRing({
+  size = 130,
+  strokeWidth = 12,
+  segments,
+}: {
+  size?: number;
+  strokeWidth?: number;
+  segments: { value: number; color: string }[];
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  const gapLen = (6 / 360) * circumference;
+  const usable = circumference - gapLen * segments.length;
+
+  let offsetAccum = 0;
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        {segments.map((seg, i) => {
+          const segLen = Math.max((seg.value / total) * usable, usable * 0.15);
+          const dashoffset = -offsetAccum;
+          offsetAccum += segLen + gapLen;
+          return (
+            <Circle
+              key={i}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={seg.color}
+              strokeWidth={strokeWidth}
+              fill="none"
+              strokeDasharray={`${segLen} ${circumference - segLen}`}
+              strokeDashoffset={dashoffset}
+              strokeLinecap="round"
+              rotation="-90"
+              origin={`${size / 2}, ${size / 2}`}
+            />
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}

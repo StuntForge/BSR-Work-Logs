@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Image } from "react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
 import { Card, Button, ProgressBar } from "../components/UI";
 import { Header } from "../components/Header";
-import { ProgressRing } from "../components/ProgressRing";
-import { IconAward, IconCalendar, IconIdCard, IconCheck } from "../components/Icons";
+import { ProgressRing, DualRing } from "../components/ProgressRing";
+import { IconAward, IconCalendar, IconIdCard, IconCheck, IconClipboardCheck, IconClipboardUser, IconClock } from "../components/Icons";
 import { colors } from "../theme";
 import { useAuth } from "../auth/AuthContext";
 
@@ -38,6 +38,11 @@ interface HomeData {
   gradePeriodStartedAt: string | null;
   requirements: Requirement[];
   eligibleForUpgrade: boolean;
+  lifetimeApprovedDays: number | null;
+  lifetimeApprovedIdentifiables: number | null;
+}
+interface PendingApproval {
+  submittedAt: string;
 }
 
 const META: Record<string, { label: string; tone: "teal" | "green" | "blue" | "purple" | "amber"; ring: string }> = {
@@ -53,9 +58,11 @@ function addDays(iso: string, days: number) {
 }
 
 export default function HomeScreen() {
-  const { refreshUser } = useAuth();
+  const navigation = useNavigation<any>();
+  const { user, refreshUser } = useAuth();
   const [data, setData] = useState<HomeData | null>(null);
   const [pending, setPending] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -71,7 +78,11 @@ export default function HomeScreen() {
     ]);
     setData(d);
     setPending(apps.applications.some((a) => a.status === "PENDING"));
-  }, [refreshUser]);
+    if (user?.isFullMember) {
+      const wa = await apiFetch<{ pending: PendingApproval[] }>("/api/work-approvals");
+      setPendingApprovals(wa.pending);
+    }
+  }, [refreshUser, user?.isFullMember]);
 
   useFocusEffect(
     useCallback(() => {
@@ -122,6 +133,12 @@ export default function HomeScreen() {
     .filter((r) => r.type !== "MIN_TIME_AT_GRADE")
     .sort((a, b) => (a.type === "HEALTH_SAFETY" ? 1 : 0) - (b.type === "HEALTH_SAFETY" ? 1 : 0));
 
+  // Full Member is the top grade — there's no next grade to make progress towards, so the usual
+  // per-requirement layout would just be empty. Lifetime totals + outstanding approvals instead.
+  const isFullMemberHome = data.nextGrade === null;
+  const oldestApprovalDays =
+    pendingApprovals.length > 0 ? Math.floor((Date.now() - new Date(pendingApprovals[0].submittedAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header
@@ -136,113 +153,196 @@ export default function HomeScreen() {
       {/* Sibling of the ScrollView (not inside it) — a negative-margin overlap gets clipped by
           ScrollView's own bounds, so this card has to live outside it to cut into the banner. */}
       <View style={styles.overlapWrap}>
-        <Card style={styles.overallCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.overallLabel}>OVERALL PROGRESS</Text>
-            <View style={{ marginTop: 10 }}>
-              <ProgressBar value={overallPercent} max={100} color={colors.tealDark} trackColor={colors.tealLight} />
+        {isFullMemberHome ? (
+          <Card style={styles.overallCard}>
+            <Image source={require("../../assets/full-member-emblem.png")} style={{ width: 56, height: 56 }} resizeMode="contain" />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={fullMemberStyles.title}>FULL MEMBER</Text>
+              <Text style={fullMemberStyles.subtitle}>Top grade achieved</Text>
+              <View style={fullMemberStyles.metPill}>
+                <IconCheck size={12} color={colors.green} />
+                <Text style={fullMemberStyles.metPillText}>ALL REQUIREMENTS MET</Text>
+              </View>
             </View>
-            <Text style={styles.overallSub}>
-              {metCount} of {totalCount} requirement{totalCount === 1 ? "" : "s"} completed
-            </Text>
-          </View>
-          <View style={{ alignItems: "center", marginLeft: 14 }}>
-            <Text style={styles.overallPercent}>{overallPercent}%</Text>
-            <View style={{ marginTop: 6 }}>
-              <IconAward size={30} color={colors.tealDark} />
+            <View style={fullMemberStyles.divider} />
+            <IconAward size={30} color={colors.tealDark} />
+          </Card>
+        ) : (
+          <Card style={styles.overallCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overallLabel}>OVERALL PROGRESS</Text>
+              <View style={{ marginTop: 10 }}>
+                <ProgressBar value={overallPercent} max={100} color={colors.tealDark} trackColor={colors.tealLight} />
+              </View>
+              <Text style={styles.overallSub}>
+                {metCount} of {totalCount} requirement{totalCount === 1 ? "" : "s"} completed
+              </Text>
             </View>
-          </View>
-        </Card>
+            <View style={{ alignItems: "center", marginLeft: 14 }}>
+              <Text style={styles.overallPercent}>{overallPercent}%</Text>
+              <View style={{ marginTop: 6 }}>
+                <IconAward size={30} color={colors.tealDark} />
+              </View>
+            </View>
+          </Card>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {timeReq && (
-          <View style={styles.timeBar}>
-            <View style={styles.timeBarTop}>
-              <View style={styles.row}>
-                <IconCalendar size={13} color={colors.tealDark} />
-                <Text style={styles.timeBarLabel}>DAYS SINCE LAST UPGRADE</Text>
-              </View>
-              <Text style={styles.timeBarValue}>
-                {timeReq.approvedValue} / {timeReq.targetValue} days
-              </Text>
-            </View>
-            <ProgressBar value={timeReq.approvedValue} max={timeReq.targetValue} color={colors.tealDark} trackColor={colors.tealLight} />
-            <Text style={styles.timeBarSub}>
-              Minimum required: {Math.round(timeReq.targetValue / 365)} years
-              {data.gradePeriodStartedAt ? ` · Earliest upgrade date: ${addDays(data.gradePeriodStartedAt, timeReq.targetValue)}` : ""}
-            </Text>
-          </View>
-        )}
-
-        {otherReqs.map((req) => {
-          const meta = META[req.type] ?? { label: req.type, tone: "teal" as const, ring: colors.teal };
-
-          if (req.type === "HEALTH_SAFETY") {
-            // A boolean gate, not a number to track — always state the level required, and only
-            // ever tick the box once the committee-set level meets or exceeds it.
-            return (
-              <Card key={req.type} style={styles.reqCard}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={styles.hsLabel}>Health and Safety Level {req.targetValue} Required</Text>
-                  <View style={[styles.hsCheckbox, req.met && styles.hsCheckboxMet]}>{req.met && <IconCheck size={20} color="#fff" />}</View>
+        {isFullMemberHome ? (
+          <>
+            <Card>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View>
+                  <DualRing size={110} strokeWidth={11} segments={[
+                    { value: data.lifetimeApprovedDays ?? 0, color: colors.green },
+                    { value: data.lifetimeApprovedIdentifiables ?? 0, color: colors.blue },
+                  ]} />
+                  <View style={StyleSheet.absoluteFillObject}>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                      <View style={fullMemberStyles.ringStatRow}>
+                        <IconClipboardCheck size={16} color={colors.green} />
+                        <View style={{ marginLeft: 6 }}>
+                          <Text style={[fullMemberStyles.ringStatValue, { color: colors.green }]}>{(data.lifetimeApprovedDays ?? 0).toLocaleString()}</Text>
+                          <Text style={fullMemberStyles.ringStatLabel}>DAYS APPROVED</Text>
+                        </View>
+                      </View>
+                      <View style={[fullMemberStyles.ringStatRow, { marginTop: 10 }]}>
+                        <IconClipboardUser size={16} color={colors.blue} />
+                        <View style={{ marginLeft: 6 }}>
+                          <Text style={[fullMemberStyles.ringStatValue, { color: colors.blue }]}>{(data.lifetimeApprovedIdentifiables ?? 0).toLocaleString()}</Text>
+                          <Text style={fullMemberStyles.ringStatLabel}>IDENTIFIABLES{"\n"}SIGNED OFF</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
                 </View>
-              </Card>
-            );
-          }
-
-          if (req.type === "SOLO_OR_CORE_TEAM") {
-            return <SoloOrCoreTeamCard key={req.type} req={req} />;
-          }
-
-          if (req.type === "POINTS" && req.pointsBreakdown) {
-            return <PointsCard key={req.type} req={req} pb={req.pointsBreakdown} />;
-          }
-
-          const percent = req.targetValue > 0 ? Math.min(100, (req.approvedValue / req.targetValue) * 100) : 0;
-          const remaining = Math.max(0, req.targetValue - req.approvedValue);
-
-          return (
-            <Card key={req.type} style={styles.reqCard}>
-              <View style={{ flexDirection: "row", gap: 16 }}>
-                <ProgressRing percent={percent} color={meta.ring} centerLabel={`${Math.round(percent)}%`} subLabel={`${req.approvedValue}/${req.targetValue}`} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.reqLabel, { color: meta.ring }]}>{meta.label.toUpperCase()}</Text>
-                  <Text style={styles.reqStat}>
-                    {req.approvedValue} / {req.targetValue} approved
-                  </Text>
-                  <View style={{ marginTop: 8 }}>
-                    <ProgressBar value={req.approvedValue} max={req.targetValue} color={meta.ring} trackColor={colors.border} />
-                  </View>
-                  <View style={styles.footerPill}>
-                    <IconIdCard size={14} color={colors.textMuted} />
-                    <Text style={styles.footerPillText}>
-                      {remaining} {req.type === "DAYS_WORKED" ? "days" : "items"} remaining
-                    </Text>
-                  </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={fullMemberStyles.impactTitle}>LIFETIME IMPACT</Text>
+                  <Text style={fullMemberStyles.impactSub}>Total days of stunt work approved for BSR members</Text>
                 </View>
               </View>
             </Card>
-          );
-        })}
 
-        {data.requirements.length === 0 && data.nextGrade && (
-          <Card style={styles.reqCard}>
-            <Text style={{ color: colors.textMuted }}>No requirements configured for this grade yet.</Text>
-          </Card>
-        )}
-
-        {pending ? (
-          <Card style={{ marginTop: 8, backgroundColor: colors.greenLight }}>
-            <Text style={{ color: colors.green, fontWeight: "700" }}>Your upgrade application has been submitted — the committee are reviewing it.</Text>
-          </Card>
+            {user?.isFullMember && (
+              <Card style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View style={fullMemberStyles.approvalsIconWrap}>
+                    <IconClipboardCheck size={20} color={colors.tealDark} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={fullMemberStyles.impactTitle}>WORK APPROVALS</Text>
+                    <Text style={fullMemberStyles.impactSub}>Review and approve stunt work submitted by members.</Text>
+                  </View>
+                </View>
+                <View style={fullMemberStyles.approvalsStatsRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <IconClipboardCheck size={16} color={colors.green} />
+                    <Text style={[fullMemberStyles.approvalsStatValue, { marginLeft: 8 }]}>{pendingApprovals.length}</Text>
+                    <Text style={fullMemberStyles.approvalsStatLabel}>{"\n"}Work records{"\n"}awaiting approval</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <IconClock size={16} color={colors.tealDark} />
+                    <Text style={[fullMemberStyles.approvalsStatValue, { marginLeft: 8 }]}>{oldestApprovalDays} days</Text>
+                  </View>
+                </View>
+                <View style={{ marginTop: 14 }}>
+                  <Button title="View Work Approvals" onPress={() => navigation.navigate("Approvals")} />
+                </View>
+              </Card>
+            )}
+          </>
         ) : (
-          data.eligibleForUpgrade && (
-            <View style={{ marginTop: 8 }}>
-              <Button title={submitting ? "Submitting..." : "Submit for Upgrade"} onPress={submitForUpgrade} disabled={submitting} loading={submitting} />
-              {submitError && <Text style={{ color: colors.red, marginTop: 8 }}>{submitError}</Text>}
-            </View>
-          )
+          <>
+            {timeReq && (
+              <View style={styles.timeBar}>
+                <View style={styles.timeBarTop}>
+                  <View style={styles.row}>
+                    <IconCalendar size={13} color={colors.tealDark} />
+                    <Text style={styles.timeBarLabel}>DAYS SINCE LAST UPGRADE</Text>
+                  </View>
+                  <Text style={styles.timeBarValue}>
+                    {timeReq.approvedValue} / {timeReq.targetValue} days
+                  </Text>
+                </View>
+                <ProgressBar value={timeReq.approvedValue} max={timeReq.targetValue} color={colors.tealDark} trackColor={colors.tealLight} />
+                <Text style={styles.timeBarSub}>
+                  Minimum required: {Math.round(timeReq.targetValue / 365)} years
+                  {data.gradePeriodStartedAt ? ` · Earliest upgrade date: ${addDays(data.gradePeriodStartedAt, timeReq.targetValue)}` : ""}
+                </Text>
+              </View>
+            )}
+
+            {otherReqs.map((req) => {
+              const meta = META[req.type] ?? { label: req.type, tone: "teal" as const, ring: colors.teal };
+
+              if (req.type === "HEALTH_SAFETY") {
+                // A boolean gate, not a number to track — always state the level required, and only
+                // ever tick the box once the committee-set level meets or exceeds it.
+                return (
+                  <Card key={req.type} style={styles.reqCard}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={styles.hsLabel}>Health and Safety Level {req.targetValue} Required</Text>
+                      <View style={[styles.hsCheckbox, req.met && styles.hsCheckboxMet]}>{req.met && <IconCheck size={20} color="#fff" />}</View>
+                    </View>
+                  </Card>
+                );
+              }
+
+              if (req.type === "SOLO_OR_CORE_TEAM") {
+                return <SoloOrCoreTeamCard key={req.type} req={req} />;
+              }
+
+              if (req.type === "POINTS" && req.pointsBreakdown) {
+                return <PointsCard key={req.type} req={req} pb={req.pointsBreakdown} />;
+              }
+
+              const percent = req.targetValue > 0 ? Math.min(100, (req.approvedValue / req.targetValue) * 100) : 0;
+              const remaining = Math.max(0, req.targetValue - req.approvedValue);
+
+              return (
+                <Card key={req.type} style={styles.reqCard}>
+                  <View style={{ flexDirection: "row", gap: 16 }}>
+                    <ProgressRing percent={percent} color={meta.ring} centerLabel={`${Math.round(percent)}%`} subLabel={`${req.approvedValue}/${req.targetValue}`} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.reqLabel, { color: meta.ring }]}>{meta.label.toUpperCase()}</Text>
+                      <Text style={styles.reqStat}>
+                        {req.approvedValue} / {req.targetValue} approved
+                      </Text>
+                      <View style={{ marginTop: 8 }}>
+                        <ProgressBar value={req.approvedValue} max={req.targetValue} color={meta.ring} trackColor={colors.border} />
+                      </View>
+                      <View style={styles.footerPill}>
+                        <IconIdCard size={14} color={colors.textMuted} />
+                        <Text style={styles.footerPillText}>
+                          {remaining} {req.type === "DAYS_WORKED" ? "days" : "items"} remaining
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
+
+            {data.requirements.length === 0 && data.nextGrade && (
+              <Card style={styles.reqCard}>
+                <Text style={{ color: colors.textMuted }}>No requirements configured for this grade yet.</Text>
+              </Card>
+            )}
+
+            {pending ? (
+              <Card style={{ marginTop: 8, backgroundColor: colors.greenLight }}>
+                <Text style={{ color: colors.green, fontWeight: "700" }}>Your upgrade application has been submitted — the committee are reviewing it.</Text>
+              </Card>
+            ) : (
+              data.eligibleForUpgrade && (
+                <View style={{ marginTop: 8 }}>
+                  <Button title={submitting ? "Submitting..." : "Submit for Upgrade"} onPress={submitForUpgrade} disabled={submitting} loading={submitting} />
+                  {submitError && <Text style={{ color: colors.red, marginTop: 8 }}>{submitError}</Text>}
+                </View>
+              )
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -463,6 +563,47 @@ const pointsStyles = StyleSheet.create({
   itemLabel: { fontSize: 12, color: colors.text, flex: 1 },
   itemValue: { fontSize: 12, fontWeight: "700", color: colors.textMuted },
   groupNote: { fontSize: 11, color: colors.textMuted, marginTop: 8, lineHeight: 16 },
+});
+
+const fullMemberStyles = StyleSheet.create({
+  title: { fontSize: 18, fontWeight: "800", color: colors.text },
+  subtitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  metPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.greenLight,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginTop: 8,
+  },
+  metPillText: { fontSize: 10, fontWeight: "800", color: colors.green, letterSpacing: 0.4 },
+  divider: { width: 1, height: 44, backgroundColor: colors.border, marginHorizontal: 14 },
+  ringStatRow: { flexDirection: "row", alignItems: "center" },
+  ringStatValue: { fontSize: 15, fontWeight: "800" },
+  ringStatLabel: { fontSize: 8, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.3 },
+  impactTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
+  impactSub: { fontSize: 12, color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+  approvalsIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.tealLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  approvalsStatsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  approvalsStatValue: { fontSize: 18, fontWeight: "800", color: colors.text },
+  approvalsStatLabel: { fontSize: 10, color: colors.textMuted, marginLeft: 4 },
 });
 
 const styles = StyleSheet.create({

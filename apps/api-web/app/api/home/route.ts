@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
-import { computeProgress } from "@/lib/progress";
+import { computeProgress, computeLifetimeStats } from "@/lib/progress";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/http";
 
@@ -14,6 +14,10 @@ export async function GET(req: NextRequest) {
     const progress = await computeProgress(session.id);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: session.id } });
 
+    // Full Members have no nextGrade — their Home screen shows lifetime totals instead of
+    // per-grade-period requirement progress, which would otherwise always be empty for them.
+    const lifetime = progress.nextGrade === null ? await computeLifetimeStats(session.id) : null;
+
     return ok({
       name: user.name,
       currentGrade: progress.currentGrade,
@@ -21,6 +25,8 @@ export async function GET(req: NextRequest) {
       gradePeriodStartedAt: progress.gradePeriodStartedAt,
       requirements: progress.requirements,
       eligibleForUpgrade: progress.eligibleForUpgrade,
+      lifetimeApprovedDays: lifetime?.lifetimeApprovedDays ?? null,
+      lifetimeApprovedIdentifiables: lifetime?.lifetimeApprovedIdentifiables ?? null,
     });
   } catch (err) {
     return serverError(err);

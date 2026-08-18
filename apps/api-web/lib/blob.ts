@@ -1,4 +1,4 @@
-import { put, get } from "@vercel/blob";
+import { put, get, del } from "@vercel/blob";
 import { EVIDENCE_ALLOWED_MIME_TYPES, EVIDENCE_MAX_BYTES } from "@bsr/shared";
 
 export function validateEvidenceFile(mimeType: string, sizeBytes: number) {
@@ -23,4 +23,13 @@ export async function uploadEvidence(workRecordId: string, fileName: string, fil
 
 export async function fetchEvidence(pathname: string) {
   return get(pathname, { access: "private" });
+}
+
+// Once an upgrade is decided, the evidence backing it is no longer needed — the production/day/
+// identifiable counts it was frozen against (UpgradeApplicationEvidence) already tell the whole
+// story. Deleting the underlying files here rather than letting them sit forever is what keeps
+// blob storage from growing without bound over years of upgrades.
+export async function deleteEvidence(pathnames: string[]) {
+  if (pathnames.length === 0) return;
+  await del(pathnames);
 }

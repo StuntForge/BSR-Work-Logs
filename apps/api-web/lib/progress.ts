@@ -39,6 +39,27 @@ export interface ProgressResult {
   eligibleForUpgrade: boolean;
 }
 
+export interface LifetimeStats {
+  lifetimeApprovedDays: number;
+  lifetimeApprovedIdentifiables: number;
+}
+
+// Full Members have no next grade, so the normal per-grade-period requirements list is always
+// empty for them — the Home screen instead shows a running lifetime total across every grade
+// period they've ever had, approved or since archived (status APPROVED or ARCHIVED both mean
+// "was approved at some point"; REJECTED/ONGOING/SUBMITTED never counted).
+export async function computeLifetimeStats(userId: string): Promise<LifetimeStats> {
+  const [lifetimeApprovedDays, lifetimeApprovedIdentifiables] = await Promise.all([
+    prisma.workDate.count({
+      where: { status: "CLAIMED", workRecord: { performerId: userId, status: { in: ["APPROVED", "ARCHIVED"] } } },
+    }),
+    prisma.identifiable.count({
+      where: { status: "APPROVED", workRecord: { performerId: userId } },
+    }),
+  ]);
+  return { lifetimeApprovedDays, lifetimeApprovedIdentifiables };
+}
+
 // Requirement calculations are reproducible from underlying verified records — computed on
 // every read, never a stored counter (spec §17).
 export async function computeProgress(userId: string): Promise<ProgressResult> {

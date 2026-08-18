@@ -51,6 +51,8 @@ interface ReviewData {
     id: string;
     status: string;
     submittedAt: string;
+    decidedAt: string | null;
+    decidedByName: string | null;
     member: { id: string; name: string; email: string };
     fromGrade: { key: string; label: string } | null;
     toGrade: { key: string; label: string } | null;
@@ -429,6 +431,28 @@ export function ReviewClient({ id }: { id: string }) {
       ) : (
         <div className="card">
           <span className={`badge ${data.application.status === "APPROVED" ? "badge-green" : "badge-red"}`}>{data.application.status}</span>
+          {data.application.status === "APPROVED" && data.application.decidedByName && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
+              <div
+                style={{
+                  border: "3px solid var(--bsr-teal-dark)",
+                  borderRadius: 10,
+                  padding: "12px 28px",
+                  transform: "rotate(-3deg)",
+                  textAlign: "center",
+                  color: "var(--bsr-teal-dark)",
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2 }}>APPROVED BY</div>
+                <div style={{ fontSize: 18, fontWeight: 800, margin: "2px 0" }}>{data.application.decidedByName}</div>
+                {data.application.decidedAt && (
+                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1 }}>
+                    {new Date(data.application.decidedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
