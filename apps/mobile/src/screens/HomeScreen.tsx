@@ -164,8 +164,6 @@ export default function HomeScreen() {
                 <Text style={fullMemberStyles.metPillText}>ALL REQUIREMENTS MET</Text>
               </View>
             </View>
-            <View style={fullMemberStyles.divider} />
-            <IconAward size={30} color={colors.tealDark} />
           </Card>
         ) : (
           <Card style={styles.overallCard}>
@@ -193,30 +191,30 @@ export default function HomeScreen() {
           <>
             <Card>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View style={{ width: 140, height: 140 }}>
+                <View style={{ width: 172, height: 172, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <Image
                     source={require("../../assets/full-member-circle-graphic.png")}
-                    style={StyleSheet.absoluteFillObject}
+                    style={{ position: "absolute", width: 172, height: 172 }}
                     resizeMode="contain"
                   />
-                  <View style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]}>
+                  <View>
                     <View style={fullMemberStyles.ringStatRow}>
                       <Image source={require("../../assets/full-member-days-approved.png")} style={fullMemberStyles.ringIcon} resizeMode="contain" />
-                      <View style={{ marginLeft: 6 }}>
+                      <View style={{ marginLeft: 8 }}>
                         <Text style={[fullMemberStyles.ringStatValue, { color: colors.green }]}>{(data.lifetimeApprovedDays ?? 0).toLocaleString()}</Text>
                         <Text style={fullMemberStyles.ringStatLabel}>DAYS APPROVED</Text>
                       </View>
                     </View>
-                    <View style={[fullMemberStyles.ringStatRow, { marginTop: 12 }]}>
+                    <View style={[fullMemberStyles.ringStatRow, { marginTop: 16 }]}>
                       <Image source={require("../../assets/full-member-identifiables-signed.png")} style={fullMemberStyles.ringIcon} resizeMode="contain" />
-                      <View style={{ marginLeft: 6 }}>
+                      <View style={{ marginLeft: 8 }}>
                         <Text style={[fullMemberStyles.ringStatValue, { color: colors.blue }]}>{(data.lifetimeApprovedIdentifiables ?? 0).toLocaleString()}</Text>
                         <Text style={fullMemberStyles.ringStatLabel}>IDENTIFIABLES{"\n"}SIGNED OFF</Text>
                       </View>
                     </View>
                   </View>
                 </View>
-                <View style={{ flex: 1, marginLeft: 8 }}>
+                <View style={{ flex: 1, marginLeft: 4 }}>
                   <Text style={fullMemberStyles.impactTitle}>LIFETIME IMPACT</Text>
                   <Text style={fullMemberStyles.impactSub}>Total days of stunt work approved for BSR members</Text>
                 </View>
@@ -227,7 +225,7 @@ export default function HomeScreen() {
               <Card style={{ marginTop: 14 }}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Image source={require("../../assets/full-member-work-approval-heading.png")} style={fullMemberStyles.headingIcon} resizeMode="contain" />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={{ flex: 1, marginLeft: 14 }}>
                     <Text style={fullMemberStyles.impactTitle}>WORK APPROVALS</Text>
                     <Text style={fullMemberStyles.impactSub}>Review and approve stunt work submitted by members.</Text>
                   </View>
@@ -235,14 +233,14 @@ export default function HomeScreen() {
                 <View style={fullMemberStyles.approvalsStatsRow}>
                   <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                     <Image source={require("../../assets/full-member-awaiting-approval.png")} style={fullMemberStyles.statIcon} resizeMode="contain" />
-                    <View style={{ marginLeft: 10 }}>
+                    <View style={{ marginLeft: 12 }}>
                       <Text style={fullMemberStyles.approvalsStatValue}>{pendingApprovals.length}</Text>
                       <Text style={fullMemberStyles.approvalsStatLabel}>Work records{"\n"}awaiting approval</Text>
                     </View>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                     <Image source={require("../../assets/full-member-oldest-request.png")} style={fullMemberStyles.statIcon} resizeMode="contain" />
-                    <View style={{ marginLeft: 10 }}>
+                    <View style={{ marginLeft: 12 }}>
                       <Text style={fullMemberStyles.approvalsStatValue}>{oldestApprovalDays} days</Text>
                       <Text style={fullMemberStyles.approvalsStatLabel}>Oldest request{"\n"}awaiting approval</Text>
                     </View>
@@ -582,15 +580,14 @@ const fullMemberStyles = StyleSheet.create({
     marginTop: 8,
   },
   metPillText: { fontSize: 10, fontWeight: "800", color: colors.green, letterSpacing: 0.4 },
-  divider: { width: 1, height: 44, backgroundColor: colors.border, marginHorizontal: 14 },
-  ringIcon: { width: 26, height: 26 },
+  ringIcon: { width: 30, height: 30 },
   ringStatRow: { flexDirection: "row", alignItems: "center" },
-  ringStatValue: { fontSize: 15, fontWeight: "800" },
-  ringStatLabel: { fontSize: 8, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.3 },
+  ringStatValue: { fontSize: 16, fontWeight: "800" },
+  ringStatLabel: { fontSize: 9, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.3 },
   impactTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
   impactSub: { fontSize: 12, color: colors.textMuted, marginTop: 4, lineHeight: 17 },
-  headingIcon: { width: 44, height: 44 },
-  statIcon: { width: 32, height: 32 },
+  headingIcon: { width: 88, height: 88 },
+  statIcon: { width: 64, height: 64 },
   approvalsStatsRow: {
     flexDirection: "row",
     justifyContent: "space-between",

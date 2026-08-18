@@ -46,7 +46,7 @@ button {
   width: 280px;
   flex-shrink: 0;
   align-self: flex-start;
-  background: var(--bsr-teal-dark);
+  background: #00444a;
   color: #fff;
   padding: 28px 20px;
   display: flex;
