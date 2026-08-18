@@ -16,6 +16,14 @@ import { SUBMIT_FOR_APPROVAL_HELP_TEXT, WORK_LOCATION, WORK_LOCATION_LABELS } fr
 
 const SUBMIT_BORDER = "#023C48";
 
+const DOCUMENT_TYPE_ORDER: DocumentType[] = ["CONTRACT", "RISK_ASSESSMENT", "RECCE_DOCUMENTATION", "OTHER"];
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  CONTRACT: "Contract",
+  RISK_ASSESSMENT: "Risk Assessment",
+  RECCE_DOCUMENTATION: "Recce Documentation",
+  OTHER: "Other",
+};
+
 interface AreaCategory {
   id: string;
   key: string;
@@ -35,9 +43,12 @@ interface LocalIdentifiable {
   status: string;
   selfCoordinated: boolean;
 }
+type DocumentType = "CONTRACT" | "RISK_ASSESSMENT" | "RECCE_DOCUMENTATION" | "OTHER";
+
 interface LocalEvidence {
   id: string;
   fileName: string;
+  documentType: DocumentType;
   pendingAsset?: { uri: string; name: string; mimeType: string };
 }
 interface RecordDetail {
@@ -52,7 +63,7 @@ interface RecordDetail {
   workDates: WorkDate[];
   approvedDays: number;
   identifiables: { id: string; category: { id: string; label: string }; performerDescription: string; verifiedDescription: string | null; status: string; selfCoordinated: boolean }[];
-  evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
+  evidenceDocuments: { id: string; fileUrl: string; fileName: string; documentType: DocumentType }[];
   fullMember: { id: string; name: string } | null;
   latestDecision: { decision: string; message: string | null } | null;
   eligibleFromDate: string;
@@ -118,6 +129,7 @@ export default function ProductionDetailScreen() {
   const [deleting, setDeleting] = useState(false);
 
   const [showIdModal, setShowIdModal] = useState(false);
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
 
   const [fmQuery, setFmQuery] = useState("");
   const [fmResults, setFmResults] = useState<{ id: string; name: string }[]>([]);
@@ -207,7 +219,7 @@ export default function ProductionDetailScreen() {
         selfCoordinated: i.selfCoordinated,
       }))
     );
-    setLocalEvidence(data.record.evidenceDocuments.map((d) => ({ id: d.id, fileName: d.fileName })));
+    setLocalEvidence(data.record.evidenceDocuments.map((d) => ({ id: d.id, fileName: d.fileName, documentType: d.documentType })));
     setIsCoreJob(!!data.record.isCoreJob);
     setCoreJobStartDate(data.record.coreJobStartDate ? data.record.coreJobStartDate.slice(0, 10) : null);
     setCoreJobEndDate(data.record.coreJobEndDate ? data.record.coreJobEndDate.slice(0, 10) : null);
@@ -306,9 +318,10 @@ export default function ProductionDetailScreen() {
     setAmendMessage("All week days added — please go through and add or remove any dates not applicable.");
   }
 
-  async function uploadOneFile(asset: { uri: string; name: string; mimeType: string }, token: string | null) {
+  async function uploadOneFile(asset: { uri: string; name: string; mimeType: string }, documentType: DocumentType, token: string | null) {
     const formData = new FormData();
     formData.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType } as any);
+    formData.append("documentType", documentType);
     const res = await fetch(`${API_URL}/api/work-records/${id}/evidence`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -362,7 +375,7 @@ export default function ProductionDetailScreen() {
         })
       ),
       ...removedIdentifiableIds.map((iid) => apiFetch(`/api/work-records/${id}/identifiables/${iid}`, { method: "DELETE" })),
-      ...addedEvidence.map((ev) => uploadOneFile(ev.pendingAsset!, token)),
+      ...addedEvidence.map((ev) => uploadOneFile(ev.pendingAsset!, ev.documentType, token)),
       ...removedEvidenceIds.map((eid) => apiFetch(`/api/work-records/${id}/evidence/${eid}`, { method: "DELETE" })),
     ]);
   }
@@ -448,20 +461,17 @@ export default function ProductionDetailScreen() {
     setLocalIdentifiables((prev) => prev.filter((i) => i.id !== identifiableId));
   }
 
-  async function pickEvidence() {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/pdf", "image/jpeg", "image/png"],
-      multiple: true,
-    });
-    if (result.canceled || !result.assets?.length) return;
+  function addEvidenceLocal(documentType: DocumentType, assets: { uri: string; name: string; mimeType: string }[]) {
     setLocalEvidence((prev) => [
       ...prev,
-      ...result.assets.map((asset) => ({
+      ...assets.map((asset) => ({
         id: `pending-${Date.now()}-${asset.name}`,
         fileName: asset.name,
-        pendingAsset: { uri: asset.uri, name: asset.name, mimeType: asset.mimeType || "application/octet-stream" },
+        documentType,
+        pendingAsset: asset,
       })),
     ]);
+    setShowEvidenceModal(false);
   }
 
   function removeEvidenceLocal(evidenceId: string) {
@@ -762,23 +772,32 @@ export default function ProductionDetailScreen() {
 
         <Card style={{ marginTop: 12 }}>
           <Text style={styles.sectionLabel}>Contract / evidence</Text>
-          {localEvidence.map((doc) => (
-            <View key={doc.id} style={styles.idRow}>
-              <Text style={{ flex: 1 }}>
-                {doc.fileName}
-                {doc.pendingAsset ? " (not saved yet)" : ""}
-              </Text>
-              {isOwnerOngoing && (
-                <TouchableOpacity onPress={() => removeEvidenceLocal(doc.id)}>
-                  <Text style={{ color: colors.red }}>Remove</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
           {localEvidence.length === 0 && <Text style={styles.muted}>No files uploaded yet.</Text>}
+          {DOCUMENT_TYPE_ORDER.map((type) => {
+            const docs = localEvidence.filter((d) => d.documentType === type);
+            if (docs.length === 0) return null;
+            return (
+              <View key={type} style={{ marginTop: 10 }}>
+                <Text style={styles.evidenceGroupLabel}>{DOCUMENT_TYPE_LABELS[type]}</Text>
+                {docs.map((doc) => (
+                  <View key={doc.id} style={styles.idRow}>
+                    <Text style={{ flex: 1 }}>
+                      {doc.fileName}
+                      {doc.pendingAsset ? " (not saved yet)" : ""}
+                    </Text>
+                    {isOwnerOngoing && (
+                      <TouchableOpacity onPress={() => removeEvidenceLocal(doc.id)}>
+                        <Text style={{ color: colors.red }}>Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+            );
+          })}
           {isOwnerOngoing && (
             <View style={{ marginTop: 10 }}>
-              <Button title="Add Files" variant="secondary" onPress={pickEvidence} />
+              <Button title="Add Files" variant="secondary" onPress={() => setShowEvidenceModal(true)} />
             </View>
           )}
         </Card>
@@ -866,6 +885,8 @@ export default function ProductionDetailScreen() {
         onClose={() => setShowIdModal(false)}
         onAdd={addIdentifiableLocal}
       />
+
+      <AddEvidenceModal visible={showEvidenceModal} onClose={() => setShowEvidenceModal(false)} onSubmit={addEvidenceLocal} />
 
       <CoreJobDatePickerModal
         visible={datePickerTarget !== null}
@@ -1002,6 +1023,120 @@ function AddIdentifiableModal({
   );
 }
 
+function AddEvidenceModal({
+  visible,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (documentType: DocumentType, assets: { uri: string; name: string; mimeType: string }[]) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [documentType, setDocumentType] = useState<DocumentType | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [files, setFiles] = useState<{ uri: string; name: string; mimeType: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setDocumentType(null);
+      setShowDropdown(false);
+      setFiles([]);
+      setError(null);
+    }
+  }, [visible]);
+
+  async function pickFiles() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/jpeg", "image/png"],
+      multiple: true,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    setFiles((prev) => [
+      ...prev,
+      ...result.assets.map((asset) => ({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType || "application/octet-stream" })),
+    ]);
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function submit() {
+    if (!documentType) {
+      setError("Select a document type.");
+      return;
+    }
+    if (files.length === 0) {
+      setError("Add at least one file.");
+      return;
+    }
+    setError(null);
+    onSubmit(documentType, files);
+  }
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <Pressable style={[styles.modalBackdrop, { paddingTop: insets.top + 76 }]} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={() => {}}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.modalTitle}>Add Files</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={{ color: colors.textMuted, fontSize: 20 }}>×</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Field label="Document Type">
+            <TouchableOpacity style={styles.dropdown} onPress={() => setShowDropdown((s) => !s)}>
+              <Text style={{ color: documentType ? colors.text : colors.textMuted }}>
+                {documentType ? DOCUMENT_TYPE_LABELS[documentType] : "Select a document type..."}
+              </Text>
+              <IconChevronDown size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            {showDropdown && (
+              <View style={styles.dropdownList}>
+                {DOCUMENT_TYPE_ORDER.map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setDocumentType(type);
+                      setShowDropdown(false);
+                    }}
+                  >
+                    <Text>{DOCUMENT_TYPE_LABELS[type]}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </Field>
+
+          {files.length > 0 && (
+            <View style={{ marginBottom: 12 }}>
+              {files.map((f, i) => (
+                <View key={`${f.name}-${i}`} style={styles.idRow}>
+                  <Text style={{ flex: 1 }}>{f.name}</Text>
+                  <TouchableOpacity onPress={() => removeFile(i)}>
+                    <Text style={{ color: colors.red }}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={{ marginBottom: 12 }}>
+            <Button title="Add File" variant="secondary" icon={<IconPlus size={16} color={colors.text} />} onPress={pickFiles} disabled={!documentType} />
+          </View>
+
+          {error && <Text style={{ color: colors.red, marginBottom: 8 }}>{error}</Text>}
+          <Button title="Submit" onPress={submit} />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function CoreJobDatePickerModal({
   visible,
   target,
@@ -1039,7 +1174,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
-  backTick: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  backTick: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: colors.green,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   title: { fontSize: 20, fontWeight: "800", color: colors.tealDark, flexShrink: 1, marginRight: 8 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   row: { flexDirection: "row", gap: 8 },
@@ -1054,6 +1201,7 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.white },
   idRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   idCategory: { fontSize: 12, fontWeight: "700", color: colors.tealDark },
+  evidenceGroupLabel: { fontSize: 12, fontWeight: "700", color: colors.tealDark, marginBottom: 6 },
   muted: { color: colors.textMuted, fontSize: 13, marginTop: 6 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(2,30,36,0.5)" },
   modalCard: { backgroundColor: colors.white, borderRadius: 20, padding: 20, marginHorizontal: 16 },

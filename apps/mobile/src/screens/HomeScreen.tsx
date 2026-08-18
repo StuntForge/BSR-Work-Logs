@@ -124,7 +124,13 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header variant="main" extraHeight={70} />
+      <Header
+        variant="main"
+        extraHeight={150}
+        name={data.name}
+        gradeLabel={data.currentGrade?.label}
+        targetLine={data.nextGrade ? `Working towards ${data.nextGrade.label}` : "You have reached the top grade in this system."}
+      />
 
       {/* Sibling of the ScrollView (not inside it) — a negative-margin overlap gets clipped by
           ScrollView's own bounds, so this card has to live outside it to cut into the banner. */}
@@ -149,15 +155,6 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <Text style={styles.welcome}>Welcome back,</Text>
-        <Text style={styles.name}>{data.name}</Text>
-        {data.currentGrade && <Text style={styles.grade}>{data.currentGrade.label}</Text>}
-        {data.nextGrade ? (
-          <Text style={styles.targetLine}>Working towards {data.nextGrade.label}</Text>
-        ) : (
-          <Text style={styles.targetLine}>You have reached the top grade in this system.</Text>
-        )}
-
         {timeReq && (
           <View style={styles.timeBar}>
             <View style={styles.timeBarTop}>
@@ -474,10 +471,6 @@ const styles = StyleSheet.create({
   overallLabel: { fontSize: 12, fontWeight: "800", color: colors.tealDark, letterSpacing: 0.5 },
   overallSub: { fontSize: 12, color: colors.textMuted, marginTop: 8 },
   overallPercent: { fontSize: 24, fontWeight: "800", color: colors.tealDark },
-  welcome: { fontSize: 15, color: colors.textMuted, marginTop: 4 },
-  name: { fontSize: 26, fontWeight: "800", color: colors.text },
-  grade: { fontSize: 16, fontWeight: "700", color: colors.tealDark, marginTop: 2 },
-  targetLine: { fontSize: 13, color: colors.textMuted, marginBottom: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 6 },
   timeBar: { marginTop: 2 },
   timeBarTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },

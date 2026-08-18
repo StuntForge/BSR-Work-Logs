@@ -298,15 +298,23 @@ model Identifiable {
   @@index([workRecordId])
 }
 
+enum EvidenceDocumentType {
+  CONTRACT
+  RISK_ASSESSMENT
+  RECCE_DOCUMENTATION
+  OTHER
+}
+
 model EvidenceDocument {
-  id           String     @id @default(cuid())
+  id           String               @id @default(cuid())
   workRecordId String
-  workRecord   WorkRecord @relation(fields: [workRecordId], references: [id])
+  workRecord   WorkRecord           @relation(fields: [workRecordId], references: [id])
   fileUrl      String
   fileName     String
   mimeType     String
   sizeBytes    Int
-  uploadedAt   DateTime   @default(now())
+  documentType EvidenceDocumentType @default(OTHER)
+  uploadedAt   DateTime             @default(now())
 
   @@index([workRecordId])
 }

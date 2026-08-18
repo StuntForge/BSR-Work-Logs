@@ -25,13 +25,17 @@ interface HeaderProps {
   onBack?: () => void;
   /** detail variant only — overrides the default back arrow, e.g. a tick when back also saves. */
   backIcon?: React.ReactNode;
+  /** main variant only — member's name/grade/target line, shown below the logo row (Home screen). */
+  name?: string;
+  gradeLabel?: string;
+  targetLine?: string;
 }
 
 // Shared banner header used at the top of every screen. `variant="main"` shows the full logo
 // lockup + sign out (Home/Work/Notifications), anchored near the TOP of the banner; `variant=
 // "detail"` shows a back arrow + title (Production detail, Review, New production). Height
 // always includes the safe-area top inset so content never sits under a notch/status bar.
-export function Header({ variant = "main", title, extraHeight = 0, rightAction, onBack, backIcon }: HeaderProps) {
+export function Header({ variant = "main", title, extraHeight = 0, rightAction, onBack, backIcon, name, gradeLabel, targetLine }: HeaderProps) {
   const navigation = useNavigation<any>();
   const { logout } = useAuth();
   const insets = useSafeAreaInsets();
@@ -47,15 +51,27 @@ export function Header({ variant = "main", title, extraHeight = 0, rightAction, 
     >
       <View style={styles.overlay} />
       {variant === "main" ? (
-        <View style={[styles.mainRow, { paddingTop: insets.top + 20 }]}>
-          <Image source={logo} style={styles.logo} resizeMode="contain" />
-          <TouchableOpacity style={styles.signOut} onPress={logout} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={styles.signOutText}>Sign out</Text>
-            <IconLogout size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        <>
+          <View style={[styles.mainRow, { paddingTop: insets.top + 20 }]}>
+            <Image source={logo} style={styles.logo} resizeMode="contain" />
+            <TouchableOpacity style={styles.signOut} onPress={logout} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.signOutText}>Sign out</Text>
+              <IconLogout size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          {name && (
+            <View style={styles.identityBlock}>
+              <View style={styles.identityNameRow}>
+                <View style={styles.identityAccent} />
+                <Text style={styles.identityName}>{name}</Text>
+              </View>
+              {gradeLabel && <Text style={styles.identityGrade}>{gradeLabel.toUpperCase()}</Text>}
+              {targetLine && <Text style={styles.identityTarget}>{targetLine}</Text>}
+            </View>
+          )}
+        </>
       ) : (
-        <View style={[styles.detailRow, { paddingTop: insets.top + 12 }]}>
+        <View style={[styles.detailRow, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity onPress={onBack ?? (() => navigation.goBack())} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             {backIcon ?? <IconArrowLeft size={24} color="#fff" />}
           </TouchableOpacity>
@@ -88,6 +104,12 @@ const styles = StyleSheet.create({
   logo: { width: 200, height: 88 },
   signOut: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   signOutText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  identityBlock: { marginTop: 22 },
+  identityNameRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  identityAccent: { width: 4, height: 26, borderRadius: 2, backgroundColor: colors.teal },
+  identityName: { color: "#fff", fontSize: 24, fontWeight: "800" },
+  identityGrade: { color: colors.teal, fontSize: 13, fontWeight: "800", letterSpacing: 1, marginTop: 6, marginLeft: 14 },
+  identityTarget: { color: "rgba(255,255,255,0.75)", fontSize: 13, marginTop: 4, marginLeft: 14 },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   detailTitle: { color: "#fff", fontSize: 20, fontWeight: "800" },
 });

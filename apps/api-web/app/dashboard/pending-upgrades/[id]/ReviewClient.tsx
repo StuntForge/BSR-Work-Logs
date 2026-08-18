@@ -4,13 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client-api";
 
+type DocumentType = "CONTRACT" | "RISK_ASSESSMENT" | "RECCE_DOCUMENTATION" | "OTHER";
+
+const DOCUMENT_TYPE_ORDER: DocumentType[] = ["CONTRACT", "RISK_ASSESSMENT", "RECCE_DOCUMENTATION", "OTHER"];
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  CONTRACT: "Contract",
+  RISK_ASSESSMENT: "Risk Assessment",
+  RECCE_DOCUMENTATION: "Recce Documentation",
+  OTHER: "Other",
+};
+
 interface Production {
   workRecordId: string;
   productionName: string;
   approvedDays: number;
   identifiableCount: number;
   fullMember: { id: string; name: string } | null;
-  evidenceDocuments: { id: string; fileUrl: string; fileName: string }[];
+  evidenceDocuments: { id: string; fileUrl: string; fileName: string; documentType: DocumentType }[];
 }
 interface ConsolidatedIdentifiable {
   id: string;
@@ -57,11 +67,20 @@ function ProductionTable({ rows, showApprovedBy, emptyText }: { rows: Production
             {showApprovedBy && <td>{p.fullMember?.name ?? "—"}</td>}
             <td>
               {p.evidenceDocuments.length === 0 && <span className="muted">None</span>}
-              {p.evidenceDocuments.map((doc) => (
-                <a key={doc.id} href={`/api/work-records/${p.workRecordId}/evidence/${doc.id}`} target="_blank" rel="noreferrer" style={{ display: "block" }}>
-                  {doc.fileName}
-                </a>
-              ))}
+              {DOCUMENT_TYPE_ORDER.map((type) => {
+                const docs = p.evidenceDocuments.filter((d) => d.documentType === type);
+                if (docs.length === 0) return null;
+                return (
+                  <div key={type} style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--bsr-teal-dark)" }}>{DOCUMENT_TYPE_LABELS[type]}</div>
+                    {docs.map((doc) => (
+                      <a key={doc.id} href={`/api/work-records/${p.workRecordId}/evidence/${doc.id}`} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                        {doc.fileName}
+                      </a>
+                    ))}
+                  </div>
+                );
+              })}
             </td>
           </tr>
         ))}

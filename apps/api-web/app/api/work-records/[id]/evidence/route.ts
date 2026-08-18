@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { validateEvidenceFile, uploadEvidence } from "@/lib/blob";
 import { ok, badRequest, unauthorized, forbidden, notFound } from "@/lib/http";
 
+const DOCUMENT_TYPES = ["CONTRACT", "RISK_ASSESSMENT", "RECCE_DOCUMENTATION", "OTHER"];
+
 // POST /api/work-records/:id/evidence — contract/evidence upload is part of the normal
 // workflow, not deferred to the final upgrade application (spec §9).
 export async function POST(req: NextRequest, { params: __params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +23,9 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const file = formData.get("file");
     if (!(file instanceof File)) return badRequest("No file provided.");
 
+    const documentTypeRaw = formData.get("documentType");
+    const documentType = typeof documentTypeRaw === "string" && DOCUMENT_TYPES.includes(documentTypeRaw) ? documentTypeRaw : "OTHER";
+
     const validationError = validateEvidenceFile(file.type, file.size);
     if (validationError) return badRequest(validationError);
 
@@ -33,10 +38,11 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
         fileName: file.name,
         mimeType: file.type,
         sizeBytes: file.size,
+        documentType: documentType as any,
       },
     });
 
-    return ok({ id: doc.id, fileUrl: doc.fileUrl, fileName: doc.fileName }, 201);
+    return ok({ id: doc.id, fileUrl: doc.fileUrl, fileName: doc.fileName, documentType: doc.documentType }, 201);
   } catch (err: any) {
     console.error("Evidence upload failed:", err);
     return badRequest(`Upload failed: ${err?.message || "unknown error"}`);
