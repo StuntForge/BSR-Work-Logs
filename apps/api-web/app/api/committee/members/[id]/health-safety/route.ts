@@ -42,14 +42,16 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
       });
     }
 
-    await writeAudit({
-      actorId: session.id,
-      action: "HEALTH_SAFETY_LEVEL_SET",
-      entityType: "User",
-      entityId: params.id,
-      before: { level: before },
-      after: { level: body.data.level },
-    });
+    if (!session.isAdmin) {
+      await writeAudit({
+        actorId: session.id,
+        action: "HEALTH_SAFETY_LEVEL_SET",
+        entityType: "User",
+        entityId: params.id,
+        before: { level: before },
+        after: { level: body.data.level },
+      });
+    }
 
     return ok({ success: true });
   } catch (err) {

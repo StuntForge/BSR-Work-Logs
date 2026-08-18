@@ -20,6 +20,8 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
     });
     if (!ticket) return notFound();
 
+    const canRespond = ticket.category !== "BUG_REPORTS" || session.isAdmin;
+
     return ok({
       ticket: {
         id: ticket.id,
@@ -31,6 +33,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         respondedAt: ticket.respondedAt,
         respondedBy: ticket.respondedBy,
         createdAt: ticket.createdAt,
+        canRespond,
         member: { id: ticket.user.id, name: ticket.user.name, email: ticket.user.email, grade: ticket.user.currentGrade?.label ?? null },
       },
     });

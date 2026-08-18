@@ -54,14 +54,16 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
       }
     });
 
-    await writeAudit({
-      actorId: session.id,
-      action: "MEMBER_UPDATED",
-      entityType: "User",
-      entityId: params.id,
-      before: { name: before.name, email: before.email, active: before.active, gradeKey: before.currentGrade?.key },
-      after: body.data,
-    });
+    if (!session.isAdmin) {
+      await writeAudit({
+        actorId: session.id,
+        action: "MEMBER_UPDATED",
+        entityType: "User",
+        entityId: params.id,
+        before: { name: before.name, email: before.email, active: before.active, gradeKey: before.currentGrade?.key },
+        after: body.data,
+      });
+    }
 
     return ok({ success: true });
   } catch (err: any) {

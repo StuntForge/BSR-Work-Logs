@@ -108,15 +108,19 @@ async function main() {
 
   console.log("Seeding test accounts...");
   const password = await bcrypt.hash("BsrTest!2026", 10);
+  const adminPassword = await bcrypt.hash("admin", 10);
 
-  const committee = await prisma.user.upsert({
-    where: { email: "committee@bsr.test" },
+  // The single global administrator — web-portal only, signs in with username (not email).
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@bsr.internal" },
     update: {},
     create: {
-      name: "BSR Committee",
-      email: "committee@bsr.test",
-      passwordHash: password,
+      name: "Administrator",
+      email: "admin@bsr.internal",
+      username: "admin",
+      passwordHash: adminPassword,
       isCommittee: true,
+      isAdmin: true,
       mustChangePassword: false,
       active: true,
     },
@@ -150,10 +154,10 @@ async function main() {
     },
   });
 
-  console.log("Done. Test logins (password BsrTest!2026):");
-  console.log(" - committee@bsr.test (committee)");
-  console.log(" - fullmember@bsr.test (Full Member)");
-  console.log(" - member@bsr.test (Probationary Member)");
+  console.log("Done. Test logins:");
+  console.log(" - Web portal admin — username: admin, password: admin");
+  console.log(" - fullmember@bsr.test (Full Member) — password BsrTest!2026");
+  console.log(" - member@bsr.test (Probationary Member) — password BsrTest!2026");
 }
 
 main()

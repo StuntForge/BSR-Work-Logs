@@ -20,6 +20,7 @@ interface TicketDetail {
   respondedAt: string | null;
   respondedBy: { id: string; name: string } | null;
   createdAt: string;
+  canRespond: boolean;
   member: { id: string; name: string; email: string; grade: string | null };
 }
 
@@ -92,7 +93,7 @@ export function SupportTicketClient({ id }: { id: string }) {
           </p>
           <p style={{ whiteSpace: "pre-wrap" }}>{ticket.response}</p>
         </div>
-      ) : (
+      ) : ticket.canRespond ? (
         <div className="card stack">
           <h2 style={{ margin: 0 }}>Respond</h2>
           <div className="field">
@@ -105,6 +106,12 @@ export function SupportTicketClient({ id }: { id: string }) {
               {saving ? "Submitting..." : "Submit"}
             </button>
           </div>
+        </div>
+      ) : (
+        <div className="card">
+          <p className="muted" style={{ margin: 0 }}>
+            This is a Bug Report — it can only be dealt with by the Administrator.
+          </p>
         </div>
       )}
     </div>

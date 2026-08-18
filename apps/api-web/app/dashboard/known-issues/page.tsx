@@ -39,7 +39,7 @@ export default function KnownIssuesPage() {
     <div>
       <h1 className="page-title">Known Issues</h1>
       <div className="page-title-underline" />
-      <p className="page-subtitle" style={{ marginTop: -18 }}>
+      <p className="page-subtitle">
         Bug reports submitted by members through the app.
       </p>
 

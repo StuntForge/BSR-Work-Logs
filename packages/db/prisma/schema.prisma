@@ -85,6 +85,14 @@ model User {
   id                 String    @id @default(cuid())
   name               String
   email              String    @unique
+  // Committee/admin web-portal login only — never used by the mobile app. Members sign in with
+  // email; committee accounts sign in with username, and only via /api/auth/portal-login, which
+  // rejects anything that isn't isCommittee.
+  username           String?   @unique
+  // The single global administrator. Distinct from isCommittee: an admin can do everything a
+  // committee member can, plus manage Committee Users and respond to Bug Reports - and critically,
+  // none of the admin's own actions are written to the audit log (everyone else's are).
+  isAdmin            Boolean   @default(false)
   passwordHash       String
   active             Boolean   @default(true)
   mustChangePassword Boolean   @default(true)

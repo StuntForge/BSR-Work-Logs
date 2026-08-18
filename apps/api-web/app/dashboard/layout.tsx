@@ -3,7 +3,7 @@ import { getServerSession } from "@/lib/server-session";
 import { NavLink } from "./NavLink";
 import { LogoutButton } from "./LogoutButton";
 import { Logo } from "./Logo";
-import { IconUsers, IconTrendingUp, IconSettings, IconMailbox, IconBug } from "./Icons";
+import { IconUsers, IconTrendingUp, IconSettings, IconLetter, IconBug, IconKey, IconClipboardList } from "./Icons";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
@@ -25,11 +25,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <NavLink href="/dashboard/pending-upgrades" icon={<IconTrendingUp />}>
               Pending Upgrades
             </NavLink>
-            <NavLink href="/dashboard/support-tickets" icon={<IconMailbox />}>
+            <NavLink href="/dashboard/support-tickets" icon={<IconLetter />}>
               Support Tickets
             </NavLink>
             <NavLink href="/dashboard/known-issues" icon={<IconBug />}>
               Known Issues
+            </NavLink>
+            <NavLink href="/dashboard/audit-logs" icon={<IconClipboardList />}>
+              Audit Logs
             </NavLink>
           </nav>
         </div>
@@ -37,6 +40,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="sidebar-banner" />
 
         <div className="sidebar-footer">
+          {session.isAdmin && (
+            <NavLink href="/dashboard/committee-users" icon={<IconKey />}>
+              Committee Users
+            </NavLink>
+          )}
           <NavLink href="/dashboard/settings" icon={<IconSettings />}>
             Settings
           </NavLink>

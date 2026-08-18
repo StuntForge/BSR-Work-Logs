@@ -6,37 +6,28 @@ import { ok, badRequest, unauthorized, serverError } from "@/lib/http";
 
 const schema = z.object({
   currentPassword: z.string().min(1),
-  email: z.string().email().optional(),
-  newPassword: z.string().min(8).optional(),
+  newPassword: z.string().min(8),
 });
 
-// PATCH /api/auth/profile — self-service update of your own email/password. Used by the
-// committee Settings page to manage the single web-portal login; current password is always
-// required to authorize a change, even to a session that's already logged in.
+// PATCH /api/auth/profile — self-service password change for any portal user (admin included).
+// Username is fixed once created (only the Committee Users page, admin-only, can change other
+// people's accounts) — this endpoint only ever touches the caller's own password.
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getSession(req);
     if (!session) return unauthorized();
 
     const body = schema.safeParse(await req.json());
-    if (!body.success) return badRequest("Invalid request.");
-    if (!body.data.email && !body.data.newPassword) return badRequest("Nothing to update.");
+    if (!body.success) return badRequest("New password must be at least 8 characters.");
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: session.id } });
     const validCurrent = await verifyPassword(body.data.currentPassword, user.passwordHash);
     if (!validCurrent) return badRequest("Current password is incorrect.");
 
-    const data: Record<string, unknown> = {};
-    if (body.data.email) data.email = body.data.email.toLowerCase();
-    if (body.data.newPassword) {
-      data.passwordHash = await hashPassword(body.data.newPassword);
-      data.mustChangePassword = false;
-    }
-
-    await prisma.user.update({ where: { id: session.id }, data });
+    const passwordHash = await hashPassword(body.data.newPassword);
+    await prisma.user.update({ where: { id: session.id }, data: { passwordHash, mustChangePassword: false } });
     return ok({ success: true });
-  } catch (err: any) {
-    if (err?.code === "P2002") return badRequest("That email is already in use.");
+  } catch (err) {
     return serverError(err);
   }
 }

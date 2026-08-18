@@ -1,28 +1,23 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, generateTempPassword, hashPassword } from "@/lib/auth";
-import { isCommitteeSession } from "@/lib/committee";
-import { writeAudit } from "@/lib/audit";
+import { isAdminSession } from "@/lib/committee";
 import { ok, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
-// POST /api/committee/members/:id/reset-password (spec §23). No email infra in V1 — the temp
-// password is returned once for the committee user to relay to the member directly.
+// POST /api/committee/committee-users/:id/reset-password — admin-only, mirrors the member
+// reset-password flow (fixed temp password, relayed by the admin directly, no email infra).
 export async function POST(req: NextRequest, { params: __params }: { params: Promise<{ id: string }> }) {
-    const params = await __params;
+  const params = await __params;
   try {
     const session = await getSession(req);
-    if (!isCommitteeSession(session)) return session ? forbidden() : unauthorized();
+    if (!isAdminSession(session)) return session ? forbidden() : unauthorized();
 
     const user = await prisma.user.findUnique({ where: { id: params.id } });
-    if (!user) return notFound();
+    if (!user || !user.isCommittee || user.isAdmin) return notFound();
 
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
-
     await prisma.user.update({ where: { id: params.id }, data: { passwordHash, mustChangePassword: true } });
-    if (!session.isAdmin) {
-      await writeAudit({ actorId: session.id, action: "PASSWORD_RESET", entityType: "User", entityId: params.id });
-    }
 
     return ok({ tempPassword });
   } catch (err) {

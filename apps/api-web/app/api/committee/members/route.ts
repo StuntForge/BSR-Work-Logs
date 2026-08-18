@@ -85,7 +85,10 @@ export async function POST(req: NextRequest) {
       return created;
     });
 
-    await writeAudit({ actorId: session.id, action: "MEMBER_CREATED", entityType: "User", entityId: user.id, after: { email: user.email, gradeKey: body.data.gradeKey } });
+    // Nothing the administrator does is written to the audit log — everyone else's actions are.
+    if (!session.isAdmin) {
+      await writeAudit({ actorId: session.id, action: "MEMBER_CREATED", entityType: "User", entityId: user.id, after: { email: user.email, gradeKey: body.data.gradeKey } });
+    }
 
     return ok({ id: user.id, tempPassword }, 201);
   } catch (err: any) {

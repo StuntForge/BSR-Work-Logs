@@ -7,7 +7,7 @@ import { Logo } from "@/app/dashboard/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,15 +17,12 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const data = await apiFetch<{ user: { isCommittee: boolean } }>("/api/auth/login", {
+      // /api/auth/portal-login only ever succeeds for a committee/admin account — no client-side
+      // gate needed here, unlike the old email-based flow.
+      await apiFetch("/api/auth/portal-login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
-      if (!data.user.isCommittee) {
-        setError("This portal is for BSR committee accounts only.");
-        setLoading(false);
-        return;
-      }
       router.push("/dashboard/users");
       router.refresh();
     } catch (err: any) {
@@ -43,8 +40,8 @@ export default function LoginPage() {
         </p>
         <form className="card auth-card stack" onSubmit={handleSubmit}>
           <div className="field">
-            <label className="label">Email</label>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+            <label className="label">Username</label>
+            <input className="input" type="text" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
           </div>
           <div className="field">
             <label className="label">Password</label>

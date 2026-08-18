@@ -78,14 +78,16 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
       });
     }
 
-    await writeAudit({
-      actorId: session.id,
-      action: `UPGRADE_${body.data.decision}`,
-      entityType: "UpgradeApplication",
-      entityId: application.id,
-      before: { status: "PENDING" },
-      after: { status: body.data.decision, message: body.data.message },
-    });
+    if (!session.isAdmin) {
+      await writeAudit({
+        actorId: session.id,
+        action: `UPGRADE_${body.data.decision}`,
+        entityType: "UpgradeApplication",
+        entityId: application.id,
+        before: { status: "PENDING" },
+        after: { status: body.data.decision, message: body.data.message },
+      });
+    }
 
     await notify({
       userId: application.userId,

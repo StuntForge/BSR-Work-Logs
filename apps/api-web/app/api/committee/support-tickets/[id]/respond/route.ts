@@ -20,6 +20,7 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
     const ticket = await prisma.supportTicket.findUnique({ where: { id: params.id } });
     if (!ticket) return notFound();
     if (ticket.status !== "OPEN") return forbidden("This ticket has already been responded to.");
+    if (ticket.category === "BUG_REPORTS" && !session.isAdmin) return forbidden("Only the Administrator can respond to Bug Reports.");
 
     const body = schema.safeParse(await req.json());
     if (!body.success) return badRequest("A response message is required.");

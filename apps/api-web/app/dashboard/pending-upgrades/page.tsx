@@ -42,7 +42,7 @@ export default function PendingUpgradesPage() {
     <div>
       <h1 className="page-title">Pending Upgrades</h1>
       <div className="page-title-underline" />
-      <p className="page-subtitle" style={{ marginTop: -18 }}>
+      <p className="page-subtitle">
         Members who have submitted for each upgrade route.
       </p>
 

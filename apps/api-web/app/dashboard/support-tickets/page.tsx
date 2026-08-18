@@ -43,7 +43,7 @@ export default function SupportTicketsPage() {
     <div>
       <h1 className="page-title">Support Tickets</h1>
       <div className="page-title-underline" />
-      <p className="page-subtitle" style={{ marginTop: -18 }}>
+      <p className="page-subtitle">
         Queries and reports submitted by members through the app.
       </p>
 

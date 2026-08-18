@@ -90,7 +90,7 @@ export default function UsersPage() {
           + New account
         </button>
       </div>
-      <p className="page-subtitle" style={{ marginTop: -18 }}>
+      <p className="page-subtitle">
         Every BSR member — these accounts sign in to the mobile app, not this portal.
       </p>
 

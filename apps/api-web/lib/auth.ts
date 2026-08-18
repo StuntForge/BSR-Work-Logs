@@ -10,7 +10,9 @@ export interface SessionUser {
   id: string;
   name: string;
   email: string;
+  username: string | null;
   isCommittee: boolean;
+  isAdmin: boolean;
   isFullMember: boolean;
   currentGradeKey: string | null;
   dateJoined: Date | null;
@@ -69,7 +71,9 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
     id: user.id,
     name: user.name,
     email: user.email,
+    username: user.username,
     isCommittee: user.isCommittee,
+    isAdmin: user.isAdmin,
     isFullMember: user.currentGrade?.key === "FULL_MEMBER",
     currentGradeKey: user.currentGrade?.key ?? null,
     dateJoined: user.dateJoined,

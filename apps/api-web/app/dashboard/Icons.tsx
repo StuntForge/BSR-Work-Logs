@@ -62,13 +62,11 @@ export function IconChevronDown() {
   );
 }
 
-export function IconMailbox() {
+export function IconLetter() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 8a4 4 0 0 0-8 0v9h8a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2Z" />
-      <path d="M12 17H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h4" />
-      <path d="M16 8h3" />
-      <line x1="12" y1="21" x2="12" y2="17" />
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m2 6 10 7 10-7" />
     </svg>
   );
 }
@@ -102,9 +100,20 @@ export function IconInbox() {
 
 export function IconKey() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="m21 2-9.6 9.6" />
       <circle cx="7.5" cy="15.5" r="5.5" />
+    </svg>
+  );
+}
+
+export function IconClipboardList() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z" />
+      <rect x="5" y="5" width="14" height="16" rx="2" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
     </svg>
   );
 }

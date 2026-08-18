@@ -45,7 +45,7 @@ button {
 .sidebar {
   width: 280px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, var(--bsr-teal-dark) 0%, var(--bsr-teal-darkest) 100%);
+  background: var(--bsr-teal-dark);
   color: #fff;
   padding: 28px 20px;
   display: flex;
@@ -107,7 +107,12 @@ button {
   right: 0;
   bottom: 0;
   height: 52%;
-  background-image: linear-gradient(180deg, var(--bsr-teal-dark) 0%, rgba(13, 61, 63, 0.35) 22%, rgba(13, 61, 63, 0.15) 55%, var(--bsr-teal-darkest) 96%),
+  /* The image's own top edge is already colour-matched to the sidebar's flat background, so the
+     overlay starts fully transparent there instead of solid teal — otherwise this gradient (which
+     only runs over the banner's own height) creates a visible seam against the sidebar's plain
+     background immediately above it. It only darkens further down, to keep the image legible
+     behind the Settings/Sign out text near the bottom. */
+  background-image: linear-gradient(180deg, transparent 0%, rgba(13, 61, 63, 0.35) 22%, rgba(13, 61, 63, 0.15) 55%, var(--bsr-teal-darkest) 96%),
     url("/web-banner.png");
   background-size: cover;
   background-position: center 62%;
