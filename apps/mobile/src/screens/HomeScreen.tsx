@@ -191,10 +191,10 @@ export default function HomeScreen() {
           <>
             <Card>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View style={{ width: 172, height: 172, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <View style={{ width: 172, height: 172, alignItems: "center", justifyContent: "center", overflow: "visible" }}>
                   <Image
                     source={require("../../assets/full-member-circle-graphic.png")}
-                    style={{ position: "absolute", width: 172, height: 172 }}
+                    style={{ position: "absolute", width: 230, height: 230 }}
                     resizeMode="contain"
                   />
                   <View>
@@ -214,8 +214,8 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 </View>
-                <View style={{ flex: 1, marginLeft: 4 }}>
-                  <Text style={fullMemberStyles.impactTitle}>LIFETIME IMPACT</Text>
+                <View style={{ flex: 1, marginLeft: 24 }}>
+                  <Text style={[fullMemberStyles.impactTitle, { fontSize: 16 }]}>LIFETIME IMPACT</Text>
                   <Text style={fullMemberStyles.impactSub}>Total days of stunt work approved for BSR members</Text>
                 </View>
               </View>
