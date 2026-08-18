@@ -62,6 +62,35 @@ export function IconChevronDown() {
   );
 }
 
+export function IconMailbox() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 8a4 4 0 0 0-8 0v9h8a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2Z" />
+      <path d="M12 17H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h4" />
+      <path d="M16 8h3" />
+      <line x1="12" y1="21" x2="12" y2="17" />
+    </svg>
+  );
+}
+
+export function IconBug() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="6" width="8" height="12" rx="4" />
+      <path d="M10 6a2 2 0 0 1 4 0" />
+      <path d="M12 6V3" />
+      <path d="m9 3 1.5 2" />
+      <path d="m15 3-1.5 2" />
+      <path d="M8 10H4" />
+      <path d="M8 14H4" />
+      <path d="m8 18-3 2" />
+      <path d="M16 10h4" />
+      <path d="M16 14h4" />
+      <path d="m16 18 3 2" />
+    </svg>
+  );
+}
+
 export function IconInbox() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

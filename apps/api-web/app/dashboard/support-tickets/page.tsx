@@ -33,7 +33,7 @@ export default function SupportTicketsPage() {
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<{ tickets: TicketItem[] }>(`/api/committee/support-tickets?status=${active}`).then((data) => {
+    apiFetch<{ tickets: TicketItem[] }>(`/api/committee/support-tickets?status=${active}&category=UPGRADE_QUERIES,OTHER`).then((data) => {
       setTickets(data.tickets);
       setLoading(false);
     });

@@ -69,6 +69,9 @@ function MainTabs() {
           tabBarIcon: ({ color, size }) => <IconBell color={color} size={size} />,
         }}
       />
+      {/* Reachable only via the gear icon on Home — not a real tab, so it's hidden from the bar
+          itself, but living inside the Tab.Navigator keeps the bottom nav visible while on it. */}
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 }
@@ -95,7 +98,6 @@ export default function RootNavigator() {
             <Stack.Screen name="NewProduction" component={NewProductionScreen} />
             <Stack.Screen name="ProductionDetail" component={ProductionDetailScreen} />
             <Stack.Screen name="Review" component={ReviewScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
           </Stack.Navigator>
         </BadgeProvider>
       )}
