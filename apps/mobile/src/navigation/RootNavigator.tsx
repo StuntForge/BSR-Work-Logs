@@ -17,6 +17,7 @@ import ProductionDetailScreen from "../screens/ProductionDetailScreen";
 import WorkApprovalsScreen from "../screens/WorkApprovalsScreen";
 import ReviewScreen from "../screens/ReviewScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
+import SettingsScreen from "../screens/SettingsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -94,6 +95,7 @@ export default function RootNavigator() {
             <Stack.Screen name="NewProduction" component={NewProductionScreen} />
             <Stack.Screen name="ProductionDetail" component={ProductionDetailScreen} />
             <Stack.Screen name="Review" component={ReviewScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
           </Stack.Navigator>
         </BadgeProvider>
       )}

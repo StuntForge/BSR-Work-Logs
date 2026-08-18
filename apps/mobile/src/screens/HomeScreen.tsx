@@ -126,8 +126,9 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Header
         variant="main"
-        extraHeight={150}
+        extraHeight={95}
         name={data.name}
+        gradeKey={data.currentGrade?.key}
         gradeLabel={data.currentGrade?.label}
         targetLine={data.nextGrade ? `Working towards ${data.nextGrade.label}` : "You have reached the top grade in this system."}
       />

@@ -10,6 +10,8 @@ export interface SessionUser {
   isFullMember: boolean;
   currentGradeKey: string | null;
   mustChangePassword?: boolean;
+  dateJoined: string | null;
+  lastUpgradedAt: string | null;
 }
 
 interface AuthContextValue {

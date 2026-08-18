@@ -13,6 +13,8 @@ export interface SessionUser {
   isCommittee: boolean;
   isFullMember: boolean;
   currentGradeKey: string | null;
+  dateJoined: Date | null;
+  lastUpgradedAt: Date | null;
 }
 
 // No self-registration or email infra in V1 (spec §29) — committee relays this temp password
@@ -70,5 +72,7 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
     isCommittee: user.isCommittee,
     isFullMember: user.currentGrade?.key === "FULL_MEMBER",
     currentGradeKey: user.currentGrade?.key ?? null,
+    dateJoined: user.dateJoined,
+    lastUpgradedAt: user.lastUpgradedAt,
   };
 }

@@ -36,7 +36,7 @@ export default function WorkApprovalsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header variant="main" />
+      <Header variant="bare" />
       <FlatList
         contentContainerStyle={styles.content}
         data={items}

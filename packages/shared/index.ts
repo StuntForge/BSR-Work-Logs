@@ -18,6 +18,15 @@ export const GRADE_LABELS: Record<GradeKey, string> = {
   FULL_MEMBER: "Full Member",
 };
 
+// BSR's official per-grade colour, used to tint the grade label wherever it's shown.
+export const GRADE_COLORS: Record<GradeKey, string> = {
+  PROBATIONARY: "#EB5F7B",
+  STUNT_PERFORMER: "#FF9900",
+  SENIOR_STUNT_PERFORMER: "#FFC30C",
+  KEY_STUNT_PERFORMER: "#78B3B4",
+  FULL_MEMBER: "#92D14F",
+};
+
 // index into GRADE_KEYS = order - 1. Full Member has no further route (spec §2).
 export function nextGradeKey(current: GradeKey): GradeKey | null {
   const idx = GRADE_KEYS.indexOf(current);

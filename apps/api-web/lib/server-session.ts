@@ -29,5 +29,7 @@ export async function getServerSession(): Promise<SessionUser | null> {
     isCommittee: user.isCommittee,
     isFullMember: user.currentGrade?.key === "FULL_MEMBER",
     currentGradeKey: user.currentGrade?.key ?? null,
+    dateJoined: user.dateJoined,
+    lastUpgradedAt: user.lastUpgradedAt,
   };
 }

@@ -1,9 +1,10 @@
-import React, { useCallback, useRef, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Animated, PanResponder, Alert } from "react-native";
+import React, { useCallback, useState } from "react";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { apiFetch } from "../api/client";
 import { IconCircle } from "../components/UI";
 import { Header } from "../components/Header";
+import { SwipeableRow } from "../components/SwipeableRow";
 import { IconAward, IconClipboardCheck } from "../components/Icons";
 import { colors } from "../theme";
 import { useBadges } from "../navigation/BadgeContext";
@@ -29,33 +30,6 @@ function formatWhen(iso: string) {
   const date = d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit" });
   const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   return `${date}, ${time}`;
-}
-
-// Built on core RN PanResponder/Animated rather than react-native-gesture-handler, which isn't
-// installed and would need a native rebuild to add — this needs none, ships as a JS-only update.
-function SwipeableRow({ children, onDismiss }: { children: React.ReactNode; onDismiss: () => void }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
-      onPanResponderMove: (_, gesture) => {
-        if (gesture.dx < 0) translateX.setValue(gesture.dx);
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx < -80) {
-          Animated.timing(translateX, { toValue: -500, duration: 180, useNativeDriver: true }).start(onDismiss);
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
-        }
-      },
-    })
-  ).current;
-
-  return (
-    <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-      {children}
-    </Animated.View>
-  );
 }
 
 export default function NotificationsScreen() {
@@ -109,7 +83,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Header variant="main" />
+      <Header variant="bare" />
       <FlatList
         contentContainerStyle={styles.content}
         data={notifications}

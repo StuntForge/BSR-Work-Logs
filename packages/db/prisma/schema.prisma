@@ -109,6 +109,8 @@ model User {
   qualifications           Qualification[]
   notifications            Notification[]
   auditEvents              AuditEvent[]
+  supportTickets           SupportTicket[]        @relation("SupportTicketAuthor")
+  supportTicketsRespondedTo SupportTicket[]       @relation("SupportTicketRespondedBy")
 
   @@index([currentGradeId])
 }
@@ -415,4 +417,39 @@ model Notification {
   createdAt         DateTime  @default(now())
 
   @@index([userId, readAt])
+}
+
+enum SupportTicketCategory {
+  UPGRADE_QUERIES
+  BUG_REPORTS
+  OTHER
+}
+
+enum SupportTicketStatus {
+  OPEN
+  CLOSED
+}
+
+// Bug Reports are surfaced separately on the web portal's "Known Issues" page (same underlying
+// rows, filtered by category) — Open/Fixed there is just Open/Closed relabelled for that audience.
+model SupportTicket {
+  id             String                @id @default(cuid())
+  userId         String
+  user           User                  @relation("SupportTicketAuthor", fields: [userId], references: [id])
+  category       SupportTicketCategory
+  title          String
+  message        String
+  status         SupportTicketStatus   @default(OPEN)
+  response       String?
+  respondedAt    DateTime?
+  respondedById  String?
+  respondedBy    User?                 @relation("SupportTicketRespondedBy", fields: [respondedById], references: [id])
+  // The performer can "delete" a closed ticket from their own list once resolved — this only
+  // hides it from their view, the committee's copy (and audit trail) is untouched.
+  hiddenFromUser Boolean               @default(false)
+  createdAt      DateTime              @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
 }
