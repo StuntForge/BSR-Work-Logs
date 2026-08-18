@@ -284,28 +284,6 @@ export function IconPencil({ size, color = "#000", strokeWidth = 1.8 }: IconProp
   );
 }
 
-export function IconLaurelBadge({ size, color = "#000", strokeWidth = 1.6 }: IconProps) {
-  return (
-    <Svg {...base(size, color)}>
-      <Polygon points="12 2.5 20.5 7.5 20.5 16.5 12 21.5 3.5 16.5 3.5 7.5" strokeWidth={strokeWidth} strokeLinejoin="round" />
-      <Polygon points="12 8 14.2 10.9 13.5 14.3 12 15.7 10.5 14.3 9.8 10.9" strokeWidth={strokeWidth} strokeLinejoin="round" />
-      <Path d="M6 10c1 2 1 4.5 1.5 6.5M6 10c.8.4 1.6.5 2 1.6M6 10c.5 1 .3 2 .8 3" strokeWidth={strokeWidth - 0.3} strokeLinecap="round" />
-      <Path d="M18 10c-1 2-1 4.5-1.5 6.5M18 10c-.8.4-1.6.5-2 1.6M18 10c-.5 1-.3 2-.8 3" strokeWidth={strokeWidth - 0.3} strokeLinecap="round" />
-    </Svg>
-  );
-}
-
-export function IconClipboardUser({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
-  return (
-    <Svg {...base(size, color)}>
-      <Path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
-      <Rect x="5" y="5" width="14" height="16" rx="2" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx="12" cy="12.3" r="2.1" strokeWidth={strokeWidth} />
-      <Path d="M8.7 17.5c.5-1.9 1.9-2.9 3.3-2.9s2.8 1 3.3 2.9" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
 export function IconTrash({ size, color = "#000", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg {...base(size, color)}>
