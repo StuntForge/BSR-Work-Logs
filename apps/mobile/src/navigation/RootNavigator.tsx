@@ -70,8 +70,10 @@ function MainTabs() {
         }}
       />
       {/* Reachable only via the gear icon on Home — not a real tab, so it's hidden from the bar
-          itself, but living inside the Tab.Navigator keeps the bottom nav visible while on it. */}
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarButton: () => null }} />
+          itself, but living inside the Tab.Navigator keeps the bottom nav visible while on it.
+          tabBarItemStyle:{display:"none"} is needed on top of tabBarButton — the null button alone
+          still reserves its flex slot in the bar, bunching the visible tabs to the left. */}
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
     </Tab.Navigator>
   );
 }

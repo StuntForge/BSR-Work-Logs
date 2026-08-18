@@ -55,12 +55,15 @@ export default function AuditLogsPage() {
                 style={{
                   padding: "12px 0",
                   borderBottom: i < entries.length - 1 ? "1px solid var(--bsr-border)" : "none",
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 16,
                 }}
               >
-                <span>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   <strong>{e.actorName}</strong> {e.description}
                 </span>
-                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                <div className="muted" style={{ fontSize: 12, flexShrink: 0, whiteSpace: "nowrap" }}>
                   {e.createdAtLabel} · {formatTime(e.createdAt)}
                 </div>
               </div>

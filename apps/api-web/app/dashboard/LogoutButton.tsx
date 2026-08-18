@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { IconLogout } from "./Icons";
 
-export function LogoutButton() {
+export function LogoutButton({ label }: { label: string }) {
   const router = useRouter();
   return (
     <button
@@ -17,7 +17,7 @@ export function LogoutButton() {
       <IconLogout />
       <span className="sidebar-signout-label">
         Sign out
-        <span className="sidebar-signout-sub">Committee Admin</span>
+        <span className="sidebar-signout-sub">{label}</span>
       </span>
     </button>
   );

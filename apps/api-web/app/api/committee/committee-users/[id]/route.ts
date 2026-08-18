@@ -26,3 +26,23 @@ export async function PATCH(req: NextRequest, { params: __params }: { params: Pr
     return serverError(err);
   }
 }
+
+// DELETE /api/committee/committee-users/:id — permanently remove a committee login. Admin-only.
+// Safe to do outright: AuditEvent.actor, UpgradeApplication.decidedBy, and SupportTicket.respondedBy
+// are all onDelete:SetNull, and AuditEvent.actorName is snapshotted at write time, so past audit
+// entries keep showing this person's name even after the account itself is gone.
+export async function DELETE(req: NextRequest, { params: __params }: { params: Promise<{ id: string }> }) {
+  const params = await __params;
+  try {
+    const session = await getSession(req);
+    if (!isAdminSession(session)) return session ? forbidden() : unauthorized();
+
+    const user = await prisma.user.findUnique({ where: { id: params.id } });
+    if (!user || !user.isCommittee || user.isAdmin) return notFound();
+
+    await prisma.user.delete({ where: { id: params.id } });
+    return ok({ success: true });
+  } catch (err) {
+    return serverError(err);
+  }
+}

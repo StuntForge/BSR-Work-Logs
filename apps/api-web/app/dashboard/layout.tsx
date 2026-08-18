@@ -3,7 +3,7 @@ import { getServerSession } from "@/lib/server-session";
 import { NavLink } from "./NavLink";
 import { LogoutButton } from "./LogoutButton";
 import { Logo } from "./Logo";
-import { IconUsers, IconTrendingUp, IconSettings, IconLetter, IconBug, IconKey, IconClipboardList } from "./Icons";
+import { IconUsers, IconTrendingUp, IconSettings, IconLetter, IconBug, IconShield, IconClipboardList } from "./Icons";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
@@ -41,14 +41,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
         <div className="sidebar-footer">
           {session.isAdmin && (
-            <NavLink href="/dashboard/committee-users" icon={<IconKey />}>
+            <NavLink href="/dashboard/committee-users" icon={<IconShield />}>
               Committee Users
             </NavLink>
           )}
           <NavLink href="/dashboard/settings" icon={<IconSettings />}>
             Settings
           </NavLink>
-          <LogoutButton />
+          <LogoutButton label={session.isAdmin ? "Administrator" : session.name} />
         </div>
       </aside>
       <main className="main">{children}</main>

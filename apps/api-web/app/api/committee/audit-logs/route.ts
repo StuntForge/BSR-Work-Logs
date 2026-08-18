@@ -52,10 +52,7 @@ export async function GET(req: NextRequest) {
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
     await prisma.auditEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
 
-    const events = await prisma.auditEvent.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { actor: { select: { id: true, name: true } } },
-    });
+    const events = await prisma.auditEvent.findMany({ orderBy: { createdAt: "desc" } });
 
     const userIds = [...new Set(events.filter((e) => e.entityType === "User").map((e) => e.entityId))];
     const applicationIds = [...new Set(events.filter((e) => e.entityType === "UpgradeApplication").map((e) => e.entityId))];
@@ -79,7 +76,7 @@ export async function GET(req: NextRequest) {
 
       return {
         id: e.id,
-        actorName: e.actor?.name ?? "Someone",
+        actorName: e.actorName ?? "Someone",
         description: describe(e.action, targetName, e.afterJson),
         createdAt: e.createdAt,
         createdAtLabel: fmtDate(e.createdAt),

@@ -45,12 +45,15 @@ button {
 .sidebar {
   width: 280px;
   flex-shrink: 0;
+  align-self: flex-start;
   background: var(--bsr-teal-dark);
   color: #fff;
   padding: 28px 20px;
   display: flex;
   flex-direction: column;
-  position: relative;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   overflow: hidden;
 }
 

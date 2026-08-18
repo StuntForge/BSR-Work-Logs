@@ -355,7 +355,7 @@ model UpgradeApplication {
   submittedAt     DateTime                     @default(now())
   decidedAt       DateTime?
   decidedById     String?
-  decidedBy       User?                        @relation("UpgradeDecidedBy", fields: [decidedById], references: [id])
+  decidedBy       User?                        @relation("UpgradeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
   decisionMessage String?
 
   evidenceLinks       UpgradeApplicationEvidence[]
@@ -401,7 +401,11 @@ model Qualification {
 model AuditEvent {
   id         String   @id @default(cuid())
   actorId    String?
-  actor      User?    @relation(fields: [actorId], references: [id])
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  // Snapshotted at write time rather than resolved live via the actor relation — the committee
+  // changes every ~2 years and old accounts get deleted, but the audit trail must still read who
+  // did what, so the name has to survive the User row itself being removed.
+  actorName  String?
   action     String
   entityType String
   entityId   String
@@ -451,7 +455,7 @@ model SupportTicket {
   response       String?
   respondedAt    DateTime?
   respondedById  String?
-  respondedBy    User?                 @relation("SupportTicketRespondedBy", fields: [respondedById], references: [id])
+  respondedBy    User?                 @relation("SupportTicketRespondedBy", fields: [respondedById], references: [id], onDelete: SetNull)
   // The performer can "delete" a closed ticket from their own list once resolved — this only
   // hides it from their view, the committee's copy (and audit trail) is untouched.
   hiddenFromUser Boolean               @default(false)

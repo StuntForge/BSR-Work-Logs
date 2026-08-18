@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/client-api";
-import { IconKey, IconUserOff } from "../Icons";
+import { IconKey, IconUserOff, IconTrash } from "../Icons";
 
 interface CommitteeUser {
   id: string;
@@ -37,6 +37,13 @@ export default function CommitteeUsersPage() {
   async function resetPassword(u: CommitteeUser) {
     const data = await apiFetch<{ tempPassword: string }>(`/api/committee/committee-users/${u.id}/reset-password`, { method: "POST" });
     setNotice(`New temporary password for ${u.name}: ${data.tempPassword}`);
+  }
+
+  async function deleteUser(u: CommitteeUser) {
+    if (!window.confirm(`Permanently delete ${u.name}'s committee account? This can't be undone. Past audit log entries will still show their name.`)) return;
+    await apiFetch(`/api/committee/committee-users/${u.id}`, { method: "DELETE" });
+    setNotice(`${u.name}'s account has been deleted.`);
+    load();
   }
 
   return (
@@ -100,6 +107,10 @@ export default function CommitteeUsersPage() {
                       <button className="btn" onClick={() => toggleActive(u)}>
                         <IconUserOff />
                         {u.active ? "Deactivate" : "Reactivate"}
+                      </button>
+                      <button className="btn btn-danger" onClick={() => deleteUser(u)}>
+                        <IconTrash />
+                        Delete
                       </button>
                     </div>
                   </td>

@@ -155,6 +155,8 @@ export default function ProductionDetailScreen() {
   const [isUnitCoordinatorDay, setIsUnitCoordinatorDayState] = useState(false);
   const [isAssistantCoordinatorDay, setIsAssistantCoordinatorDayState] = useState(false);
 
+  // Unit Coordinator, Assistant Coordinator, and Solo/Self-Coordinated are mutually exclusive —
+  // only one can describe a given work record. Checking any one of the three clears the other two.
   function setIsUnitCoordinatorDay(value: boolean) {
     setIsUnitCoordinatorDayState(value);
     if (value) {
@@ -169,24 +171,12 @@ export default function ProductionDetailScreen() {
       setIsSoloSubmission(false);
     }
   }
-
-  // Solo/Self-Coordinated means NO Coordinator was present at all that day — that's incompatible
-  // with an identifiable individually marked self-coordinated, which implies a Coordinator WAS
-  // present for the rest of the job. Catch the contradiction before it's set, since the two can
-  // otherwise silently double-count (2pts for the Solo day, plus 1pt for the identifiable).
   function handleSoloToggle(value: boolean) {
-    if (value && localIdentifiables.some((i) => i.selfCoordinated)) {
-      Alert.alert(
-        "Solo/Self-Coordinated day?",
-        "This option is ONLY for a day when there wasn't a Coordinator present at all. For a self-coordinated identifiable where a Coordinator WAS present, please write their name in the box below instead and send it to them for approval.",
-        [
-          { text: "Back", style: "cancel" },
-          { text: "Confirm — No Coordinator Present", onPress: () => setIsSoloSubmission(true) },
-        ]
-      );
-      return;
-    }
     setIsSoloSubmission(value);
+    if (value) {
+      setIsUnitCoordinatorDayState(false);
+      setIsAssistantCoordinatorDayState(false);
+    }
   }
 
   // Calendar taps, identifiables, and evidence picks all only touch local state — nothing is
@@ -592,7 +582,7 @@ export default function ProductionDetailScreen() {
   const approvedDaysDisplay = localDates.filter((d) => d.status === "CLAIMED").length;
   const isKeyMember = user?.currentGradeKey === "KEY_STUNT_PERFORMER";
   const isCoordinatorDay = isUnitCoordinatorDay || isAssistantCoordinatorDay;
-  const canGoSolo = (user?.currentGradeKey === "SENIOR_STUNT_PERFORMER" || isKeyMember) && !isCoordinatorDay;
+  const canUseSolo = user?.currentGradeKey === "SENIOR_STUNT_PERFORMER" || isKeyMember;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -622,15 +612,23 @@ export default function ProductionDetailScreen() {
           </View>
         </View>
 
-        {isOwnerOngoing && isKeyMember && (
+        {isOwnerOngoing && canUseSolo && (
           <Card style={{ marginTop: 12 }}>
-            <View style={[styles.row, { justifyContent: "space-between" }]}>
-              <Text style={styles.label}>Unit Coordinator Day?</Text>
-              <Switch value={isUnitCoordinatorDay} onValueChange={setIsUnitCoordinatorDay} />
-            </View>
-            <View style={[styles.row, { justifyContent: "space-between", marginTop: 10 }]}>
-              <Text style={styles.label}>Assistant Coordinator Day?</Text>
-              <Switch value={isAssistantCoordinatorDay} onValueChange={setIsAssistantCoordinatorDay} />
+            {isKeyMember && (
+              <>
+                <View style={[styles.row, { justifyContent: "space-between" }]}>
+                  <Text style={styles.label}>Unit Coordinator Day?</Text>
+                  <Switch value={isUnitCoordinatorDay} onValueChange={setIsUnitCoordinatorDay} />
+                </View>
+                <View style={[styles.row, { justifyContent: "space-between", marginTop: 10 }]}>
+                  <Text style={styles.label}>Assistant Coordinator Day?</Text>
+                  <Switch value={isAssistantCoordinatorDay} onValueChange={setIsAssistantCoordinatorDay} />
+                </View>
+              </>
+            )}
+            <View style={[styles.row, { justifyContent: "space-between", marginTop: isKeyMember ? 10 : 0 }]}>
+              <Text style={styles.label}>Solo/Self Coordinated?</Text>
+              <Switch value={isSoloSubmission} onValueChange={handleSoloToggle} />
             </View>
             {isCoordinatorDay && (
               <Text style={styles.muted}>
@@ -638,6 +636,10 @@ export default function ProductionDetailScreen() {
                 weren't, please create a new work log specifically for these days.
               </Text>
             )}
+            <Text style={[styles.muted, { marginTop: 10 }]}>
+              Only select Solo/Self-Coordinated if there was no Coordinator hired for the job at all. If you self-coordinated just one stunt on
+              someone else's job, flag that on the identifiable instead of here.
+            </Text>
           </Card>
         )}
 
@@ -805,13 +807,6 @@ export default function ProductionDetailScreen() {
         {isOwnerOngoing && (
           <Card style={{ marginTop: 12, borderWidth: 2, borderColor: SUBMIT_BORDER }}>
             <Text style={styles.sectionLabel}>Submit for approval</Text>
-
-            {canGoSolo && (
-              <View style={[styles.row, { justifyContent: "space-between", marginBottom: 10 }]}>
-                <Text style={styles.label}>Solo/Self Coordinated?</Text>
-                <Switch value={isSoloSubmission} onValueChange={handleSoloToggle} />
-              </View>
-            )}
 
             <Text style={[styles.muted, { marginBottom: 14 }]}>
               {isSoloSubmission

@@ -24,6 +24,7 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
                 fullMember: { select: { id: true, name: true } },
                 evidenceDocuments: true,
                 identifiables: { where: { status: "APPROVED" }, include: { category: true } },
+                workDates: { where: { status: "CLAIMED" }, select: { date: true } },
               },
             },
           },
@@ -39,6 +40,10 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
     // the SOLO_OR_CORE_TEAM composite requirement) — those records get their own headings on this
     // page instead of cluttering the general production list, matching committee's mental model.
     const isSeniorApplicant = fromGrade?.key === "SENIOR_STUNT_PERFORMER";
+    // Key -> Full Member is the only route with the 80-point composite (Solo/Unit/Assistant
+    // Coordinator days + self-coordinated identifiables) — same idea, its own headed sections
+    // plus the full points breakdown, since that's everything the requirement was built from.
+    const isKeyApplicant = fromGrade?.key === "KEY_STUNT_PERFORMER";
 
     const evidenceLinks = application.evidenceLinks;
 
@@ -51,16 +56,26 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         identifiableCount: link.approvedIdentifiablesSnapshot,
         fullMember: wr.fullMember,
         evidenceDocuments: wr.evidenceDocuments,
+        dates: wr.workDates.map((d) => d.date),
       };
     };
 
     const productions = evidenceLinks
-      .filter((link) => !isSeniorApplicant || (!link.workRecord.isSoloSubmission && !link.workRecord.isCoreJob))
+      .filter((link) => {
+        if (isSeniorApplicant && (link.workRecord.isSoloSubmission || link.workRecord.isCoreJob)) return false;
+        if (isKeyApplicant && (link.workRecord.isSoloSubmission || link.workRecord.isUnitCoordinatorDay || link.workRecord.isAssistantCoordinatorDay)) return false;
+        return true;
+      })
       .map(toProductionRow);
 
-    const soloSubmissions = isSeniorApplicant ? evidenceLinks.filter((link) => link.workRecord.isSoloSubmission).map(toProductionRow) : [];
+    const soloSubmissions =
+      isSeniorApplicant || isKeyApplicant ? evidenceLinks.filter((link) => link.workRecord.isSoloSubmission).map(toProductionRow) : [];
 
     const coreTeamJobs = isSeniorApplicant ? evidenceLinks.filter((link) => link.workRecord.isCoreJob).map(toProductionRow) : [];
+
+    const unitCoordinatorJobs = isKeyApplicant ? evidenceLinks.filter((link) => link.workRecord.isUnitCoordinatorDay).map(toProductionRow) : [];
+
+    const assistantCoordinatorJobs = isKeyApplicant ? evidenceLinks.filter((link) => link.workRecord.isAssistantCoordinatorDay).map(toProductionRow) : [];
 
     const consolidatedIdentifiables = application.evidenceLinks.flatMap((link) =>
       link.workRecord.identifiables.map((i) => ({
@@ -69,12 +84,63 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
         verifiedDescription: i.verifiedDescription ?? i.performerDescription,
         productionName: link.workRecord.continuationSequence > 0 ? `Cont ${link.workRecord.continuationSequence}: ${link.workRecord.productionFamily.rootName}` : link.workRecord.productionFamily.rootName,
         approvedBy: link.workRecord.fullMember?.name ?? null,
+        selfCoordinated: i.selfCoordinated,
       }))
     );
+
+    const selfCoordinatedIdentifiables = isKeyApplicant ? consolidatedIdentifiables.filter((i) => i.selfCoordinated) : [];
 
     // Computed from every contributing record, not just `productions` — Solo/Core Team days
     // still count toward the total even though they're broken out into their own sections.
     const totalApprovedDays = application.evidenceLinks.reduce((sum, link) => sum + link.approvedDaysSnapshot, 0);
+
+    // Frozen mirror of lib/progress.ts's POINTS calculation, scoped to exactly the WorkRecords
+    // this application snapshotted at submit time rather than the member's live grade period —
+    // committee review should show what the application was actually approved on, not whatever
+    // the member's progress happens to be by the time it's reviewed.
+    let pointsBreakdown: null | {
+      soloDays: number;
+      soloPoints: number;
+      unitCoordinatorDays: number;
+      unitCoordinatorPoints: number;
+      assistantCoordinatorDays: number;
+      assistantCoordinatorPoints: number;
+      selfCoordinatingCount: number;
+      selfCoordinatingPoints: number;
+      groupABPoints: number;
+      groupCDPoints: number;
+      groupCDCounted: number;
+      totalPoints: number;
+    } = null;
+    if (isKeyApplicant) {
+      const soloDays = soloSubmissions.reduce((sum, p) => sum + p.approvedDays, 0);
+      const unitCoordinatorDays = unitCoordinatorJobs.reduce((sum, p) => sum + p.approvedDays, 0);
+      const assistantCoordinatorDays = assistantCoordinatorJobs.reduce((sum, p) => sum + p.approvedDays, 0);
+      const selfCoordinatingCount = selfCoordinatedIdentifiables.length;
+
+      const soloPoints = soloDays * 2;
+      const unitCoordinatorPoints = unitCoordinatorDays * 1;
+      const assistantCoordinatorPoints = assistantCoordinatorDays * 1;
+      const selfCoordinatingPoints = selfCoordinatingCount * 1;
+      const groupABPoints = soloPoints + unitCoordinatorPoints;
+      const groupCDPoints = assistantCoordinatorPoints + selfCoordinatingPoints;
+      const groupCDCounted = Math.min(groupCDPoints, 60);
+
+      pointsBreakdown = {
+        soloDays,
+        soloPoints,
+        unitCoordinatorDays,
+        unitCoordinatorPoints,
+        assistantCoordinatorDays,
+        assistantCoordinatorPoints,
+        selfCoordinatingCount,
+        selfCoordinatingPoints,
+        groupABPoints,
+        groupCDPoints,
+        groupCDCounted,
+        totalPoints: groupABPoints + groupCDCounted,
+      };
+    }
 
     return ok({
       application: {
@@ -91,7 +157,11 @@ export async function GET(req: NextRequest, { params: __params }: { params: Prom
       productions,
       soloSubmissions,
       coreTeamJobs,
+      unitCoordinatorJobs,
+      assistantCoordinatorJobs,
       consolidatedIdentifiables,
+      selfCoordinatedIdentifiables,
+      pointsBreakdown,
     });
   } catch (err) {
     return serverError(err);
