@@ -4,7 +4,7 @@
     "slug": "bsr-upgrades",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/app-icon.png",
+    "icon": "./assets/app-icon-ios.png",
     "userInterfaceStyle": "light",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -20,13 +20,17 @@
       "package": "com.stuntforge.bsrworkrecords",
       "adaptiveIcon": {
         "backgroundColor": "#023c48",
-        "foregroundImage": "./assets/app-icon.png",
-        "monochromeImage": "./assets/app-icon.png"
+        "foregroundImage": "./assets/app-icon-adaptive.png",
+        "monochromeImage": "./assets/app-icon-adaptive.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#023c48"
     },
     "plugins": [
       [
@@ -36,6 +40,13 @@
           "imageWidth": 220,
           "resizeMode": "contain",
           "backgroundColor": "#023c48"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#023c48"
         }
       ]
     ],

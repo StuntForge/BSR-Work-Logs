@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../api/client";
 import { getToken, setToken, clearToken } from "../api/storage";
+import { registerPushToken } from "../notifications/registerPushToken";
 
 export interface SessionUser {
   id: string;
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiFetch<{ user: SessionUser }>("/api/auth/me");
       setUser(data.user);
+      registerPushToken();
     } catch {
       await clearToken();
       setUser(null);
@@ -57,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     await setToken(data.token);
     setUser(data.user);
+    registerPushToken();
   }, []);
 
   const logout = useCallback(async () => {

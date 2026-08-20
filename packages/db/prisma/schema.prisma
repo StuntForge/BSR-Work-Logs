@@ -109,6 +109,9 @@ model User {
   // than derived.
   dateJoined         DateTime?
   lastUpgradedAt     DateTime?
+  // Guards the weekly Full Member "outstanding approvals" push digest against sending twice for
+  // the same week (e.g. a re-run/double-fire of the cron job) — set each time that digest sends.
+  lastApprovalDigestSentAt DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -124,8 +127,22 @@ model User {
   auditEvents              AuditEvent[]
   supportTickets           SupportTicket[]        @relation("SupportTicketAuthor")
   supportTicketsRespondedTo SupportTicket[]       @relation("SupportTicketRespondedBy")
+  pushTokens               PushToken[]
 
   @@index([currentGradeId])
+}
+
+// One row per device the user has registered for push (Expo push tokens are per install, so a
+// user can have several — e.g. phone + tablet, or a reinstall leaving a stale token behind).
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // Authoritative grade periods. Time Served is derived from the open (endedAt = null) row,

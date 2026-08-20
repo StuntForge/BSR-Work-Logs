@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
+import { sendPush } from "@/lib/push";
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
 const schema = z.object({
@@ -74,6 +75,14 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
       relatedEntityType: "WorkRecord",
       relatedEntityId: record.id,
     });
+
+    // Push is deliberately narrower than the in-app notification: only approvals push (never
+    // rejections), and this route only ever handles Full Member-reviewed records — Solo/
+    // Self-Coordinated submissions are auto-approved through a separate endpoint and never reach
+    // here, so there's no need to filter isSoloSubmission out explicitly.
+    if (body.data.decision === "APPROVED") {
+      await sendPush(record.performerId, "Work record approved", "A Full Member has approved your work record.");
+    }
 
     return ok({ success: true });
   } catch (err) {

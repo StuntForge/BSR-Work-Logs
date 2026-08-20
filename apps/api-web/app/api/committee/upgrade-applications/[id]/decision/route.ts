@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { isCommitteeSession } from "@/lib/committee";
 import { writeAudit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
+import { sendPush } from "@/lib/push";
 import { deleteEvidence } from "@/lib/blob";
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/http";
 
@@ -124,6 +125,11 @@ export async function POST(req: NextRequest, { params: __params }: { params: Pro
       relatedEntityType: "UpgradeApplication",
       relatedEntityId: application.id,
     });
+
+    // Push only for approvals — never rejections (spec: keep this narrow, no spam).
+    if (body.data.decision === "APPROVED") {
+      await sendPush(application.userId, "Upgrade approved", "Congratulations — your upgrade has been approved.");
+    }
 
     return ok({ success: true });
   } catch (err) {
